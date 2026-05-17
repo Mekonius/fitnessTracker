@@ -53,6 +53,33 @@ input:focus,textarea:focus{border-color:#c8ff00!important}
 <body>
 <div id="sload" style="height:100vh;display:flex;align-items:center;justify-content:center;color:#444;font-size:12px;letter-spacing:2px">INDLÆSER…</div>
 
+<!-- Velkomst overlay -->
+<div id="swelcome" style="display:none;position:fixed;inset:0;background:#0e0e0eee;z-index:100;overflow-y:auto">
+  <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px">
+    <div style="width:100%;max-width:360px">
+      <div id="wstep1">
+        <div style="font-family:'Bebas Neue';font-size:56px;letter-spacing:4px;color:#c8ff00;line-height:1;margin-bottom:8px">LØFT</div>
+        <div style="font-size:11px;color:#444;letter-spacing:3px;margin-bottom:40px">DIN PERSONLIGE TRÆNINGSTRACKER</div>
+        <div style="margin-bottom:32px;display:flex;flex-direction:column;gap:20px">
+          <div style="display:flex;gap:14px;align-items:flex-start">
+            <div style="width:32px;height:32px;border:1px solid #c8ff0040;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:'Bebas Neue';color:#c8ff00;font-size:14px">1</div>
+            <div><div style="font-size:13px;color:#e0dcd4;margin-bottom:3px">Sæt dit split op</div><div style="font-size:12px;color:#444;line-height:1.6">Vælg hvilke dage du træner og hvilket program — PPL, Push/Pull eller dit eget.</div></div>
+          </div>
+          <div style="display:flex;gap:14px;align-items:flex-start">
+            <div style="width:32px;height:32px;border:1px solid #c8ff0040;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:'Bebas Neue';color:#c8ff00;font-size:14px">2</div>
+            <div><div style="font-size:13px;color:#e0dcd4;margin-bottom:3px">Log dine træninger</div><div style="font-size:12px;color:#444;line-height:1.6">Registrer vægt og reps for hvert sæt. Gem efter træningen.</div></div>
+          </div>
+          <div style="display:flex;gap:14px;align-items:flex-start">
+            <div style="width:32px;height:32px;border:1px solid #c8ff0040;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:'Bebas Neue';color:#c8ff00;font-size:14px">3</div>
+            <div><div style="font-size:13px;color:#e0dcd4;margin-bottom:3px">Følg din fremgang</div><div style="font-size:12px;color:#444;line-height:1.6">Se historik og statistik under Historik-fanen.</div></div>
+          </div>
+        </div>
+        <button class="btn-p" onclick="closeWelcome()">KOM I GANG →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="sauth" style="display:none">
   <div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px">
     <div style="width:100%;max-width:360px">
@@ -137,6 +164,18 @@ const app  = initializeApp({
 const auth = getAuth(app);
 const db   = getFirestore(app);
 const googleProvider = new GoogleAuthProvider();
+
+// ── Welcome ───────────────────────────────────────────────────────────────────
+function maybeShowWelcome(){
+  if(!localStorage.getItem("loft_welcomed")){
+    document.getElementById("swelcome").style.display="block";
+  }
+}
+function closeWelcome(){
+  localStorage.setItem("loft_welcomed","1");
+  document.getElementById("swelcome").style.display="none";
+}
+window.closeWelcome=closeWelcome;
 
 // Register service worker
 if ("serviceWorker" in navigator) {
@@ -382,7 +421,7 @@ onAuthStateChanged(auth, async user=>{
     document.getElementById("sapp").style.display="block";
     document.getElementById("hname").textContent=user.displayName||user.email.split("@")[0];
     if(user.photoURL){const av=document.getElementById("havatar");av.src=user.photoURL;av.style.display="block";}
-    updateHdr();startListen();loadUsers();await loadSettings();
+    updateHdr();startListen();loadUsers();maybeShowWelcome();await loadSettings();
   } else {
     CU=null;
     if(unsubSess){unsubSess();unsubSess=null;}
@@ -403,7 +442,7 @@ async function loadUsers(){const snap=await getDocs(collection(db,"users"));allU
 function updateHdr(){
   const today=tds(new Date()),type=getType(today);
   document.getElementById("hdate").innerHTML=cap(fmtDate(today))+" — "
-    +(type?'<span style="color:#c8ff00">Træningsdag · '+(type==="TRAEK"?"TRÆK":type==="SKUB"?"SKUB":"BEN")+"</span>":'<span style="color:#333">Hviledag</span>');
+    +(type?'<span style="color:#c8ff00">Træningsdag · '+typeLabel(type)+"</span>":'<span style="color:#333">Hviledag</span>');
 }
 
 // ── View ──────────────────────────────────────────────────────────────────────
@@ -421,18 +460,33 @@ function showView(v){
   else if(v==="builder"){editingProgram=editingProgram||{name:"",exercises:[],color:"#c8ff00"};builderMode=null;renderBuilder();}
 }
 
+function typeLabel(t){if(t==="TRAEK")return"TRÆK";if(t==="SKUB")return"SKUB";if(t==="BEN")return"BEN";return customPrograms[t]?.name||t;}
+function typeColor(t){if(t==="TRAEK")return"#2a6a9a";if(t==="SKUB")return"#9a4a2a";if(t==="BEN")return"#1a5a1a";return"#2a4a00";}
 function dateChips(){
   const today=tds(new Date());
   let h='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:20px">';
   upcoming(5).forEach(u=>{
-    const act=u.date===activeDate,lbl=u.type==="TRAEK"?"TRÆK":"SKUB",clr=u.type==="TRAEK"?"#2a6a9a":"#9a4a2a";
-    h+='<div class="chip'+(act?" active":"")+'" onclick="setDate(\'' +u.date+ '\')">'+(u.date===today?"I dag":cap(dayName(u.date)))+' <span style="color:'+clr+';font-size:10px">'+lbl+'</span></div>';
+    const act=u.date===activeDate;
+    h+='<div class="chip'+(act?" active":"")+'" onclick="setDate(\''+u.date+'\')">'+
+      (u.date===today?"I dag":cap(dayName(u.date)))+
+      ' <span style="color:'+typeColor(u.type)+';font-size:10px">'+typeLabel(u.type)+'</span></div>';
   });
   return h+'</div>';
 }
 
 function renderToday(){
   const today=tds(new Date()),isTrain=!!getType(today);
+  // Hint: no split configured
+  if(!Object.keys(userSplit).length){
+    document.getElementById("vtoday").innerHTML=
+      '<div style="text-align:center;padding:48px 0">'
+      +'<div style="font-size:32px;margin-bottom:16px">💪</div>'
+      +'<div style="font-size:14px;color:#e0dcd4;margin-bottom:8px">Sæt dit split op</div>'
+      +'<div style="font-size:12px;color:#444;line-height:1.8;margin-bottom:24px">Du har ikke valgt træningsdage endnu.<br>Gå til Split-fanen for at komme i gang.</div>'
+      +'<button class="btn-p" style="width:auto;padding:12px 28px" onclick="showView(\'settings\')">OPSÆT SPLIT →</button>'
+      +'</div>';
+    return;
+  }
   let h='<div style="margin-bottom:24px"><div style="font-size:10px;color:#444;letter-spacing:2px;margin-bottom:10px">KOMMENDE TRÆNING</div>';
   upcoming(8).forEach(u=>{
     const done=!!sessions[u.date],isT=u.date===today;
@@ -703,7 +757,7 @@ function renderBuilder(){
 function renderHistContent(data){
   const el=document.getElementById("hcontent");if(!el)return;
   const dates=Object.keys(data).sort().reverse();
-  if(!dates.length){el.innerHTML='<div style="color:#333;font-size:13px;text-align:center;padding:40px 0">Ingen sessioner endnu.</div>';return;}
+  if(!dates.length){el.innerHTML='<div style="text-align:center;padding:40px 0"><div style="font-size:12px;color:#333;margin-bottom:12px">Ingen sessioner endnu.</div><div style="font-size:11px;color:#2a2a2a;line-height:1.8">Log din første træning under Log-fanen,<br>så vises den her bagefter.</div></div>';return;}
   let h="";
   dates.forEach(date=>{
     const s=data[date],tot=(s.exercises||[]).reduce((a,e)=>a+(e.sets||[]).length,0);

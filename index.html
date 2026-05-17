@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
+<meta name="theme-color" content="#0e0e0e"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="LØFT"/>
+<link rel="manifest" href="manifest.json"/>
+<link rel="apple-touch-icon" href="apple-touch-icon.png"/>
+<title>LØFT</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Bebas+Neue&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:#0e0e0e;color:#f0ece4;font-family:"DM Mono","Courier New",monospace;min-height:100vh}
+input,textarea{outline:none;font-family:inherit}
+input:focus,textarea:focus{border-color:#c8ff00!important}
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:#1a1a1a}::-webkit-scrollbar-thumb{background:#444;border-radius:2px}
+.pill{display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;letter-spacing:1px}
+.pill-t{background:#1a3a5c;color:#5bc8ff}.pill-s{background:#3a1a1a;color:#ff8c5b}
+.btn-p{background:#c8ff00;color:#0e0e0e;border:none;border-radius:6px;padding:13px;font-family:"Bebas Neue",sans-serif;font-size:18px;letter-spacing:3px;cursor:pointer;width:100%}
+.btn-p:hover{background:#aadd00}.btn-p:disabled{background:#444;color:#666;cursor:not-allowed}
+.btn-g{background:#111;color:#777;border:1px solid #2a2a2a;border-radius:6px;padding:13px;font-family:"Bebas Neue",sans-serif;font-size:15px;letter-spacing:2px;cursor:pointer;width:100%}
+.btn-g:hover{border-color:#555;color:#aaa}
+.btn-google{width:100%;display:flex;align-items:center;justify-content:center;gap:10px;background:#fff;color:#3c4043;border:1px solid #ddd;border-radius:6px;padding:12px;font-size:14px;font-family:inherit;cursor:pointer;font-weight:500}
+.btn-google:hover{background:#f8f8f8;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.btn-google svg{flex-shrink:0}
+.divider{display:flex;align-items:center;gap:12px;margin:16px 0;color:#444;font-size:11px;letter-spacing:1px}
+.divider::before,.divider::after{content:"";flex:1;height:1px;background:#222}
+.field{width:100%;background:#111;border:1px solid #2a2a2a;border-radius:6px;color:#f0ece4;padding:12px 14px;font-size:13px;font-family:inherit}
+.field::placeholder{color:#444}
+.tab{background:transparent;border:none;border-bottom:2px solid transparent;color:#444;padding:7px 12px;cursor:pointer;font-size:11px;letter-spacing:1.5px;font-family:inherit;text-transform:uppercase}
+.tab.active{border-bottom-color:#c8ff00;color:#c8ff00}
+.urow{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:6px;margin-bottom:5px;border:1px solid #1a1a1a;background:#111}
+.sbox{background:#111;border:1px solid #1a1a1a;border-radius:6px;padding:12px 10px}
+.excard{background:#111;border:1px solid #1a1a1a;border-radius:8px;padding:14px;margin-bottom:10px}
+.pcard{border:1px solid #1a1a1a;border-radius:8px;margin-bottom:8px;overflow:hidden}
+.phdr{display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;background:#111}
+.sinput{background:#0a0a0a;border:1px solid #1e1e1e;border-radius:4px;color:#f0ece4;padding:7px;font-size:15px;text-align:center;font-family:inherit;width:100%}
+.sinput:focus{border-color:#c8ff00}
+.chip{padding:5px 12px;border:1px solid #2a2a2a;border-radius:20px;font-size:11px;cursor:pointer;color:#666;background:transparent;display:inline-block;margin:3px}
+.chip.active{border-color:#c8ff00;color:#c8ff00;background:#1e2a00}
+.hrow{background:#111;border:1px solid #1a1a1a;border-radius:8px;padding:14px 16px;margin-bottom:8px}
+.hrow:hover{background:#181818}
+.rmb{background:none;border:none;color:#333;cursor:pointer;font-size:18px;line-height:1;padding:2px 6px}
+.rmb:hover{color:#ff4444}
+.asb{width:100%;background:none;border:1px dashed #1e1e1e;border-radius:4px;color:#444;cursor:pointer;padding:5px;font-size:11px;letter-spacing:1px;font-family:inherit;margin-top:4px}
+.asb:hover{border-color:#c8ff0055;color:#c8ff00}
+.avatar{width:28px;height:28px;border-radius:50%;object-fit:cover}
+</style>
+</head>
+<body>
+<div id="sload" style="height:100vh;display:flex;align-items:center;justify-content:center;color:#444;font-size:12px;letter-spacing:2px">INDLÆSER…</div>
+
+<div id="sauth" style="display:none">
+  <div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px">
+    <div style="width:100%;max-width:360px">
+      <div style="text-align:center;margin-bottom:40px">
+        <div style="font-family:'Bebas Neue';font-size:56px;letter-spacing:4px;color:#c8ff00;line-height:1">LØFT</div>
+        <div style="font-size:11px;color:#444;letter-spacing:3px;margin-top:4px">TRÆNINGSTRACKER</div>
+      </div>
+
+      <!-- Google Sign-In -->
+      <button class="btn-google" onclick="doGoogle()">
+        <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M16.51 8H8.98v3h4.3c-.18 1-.74 1.48-1.6 2.04v2.01h2.6a7.8 7.8 0 002.38-5.88c0-.57-.05-.66-.15-1.18z"/><path fill="#34A853" d="M8.98 17c2.16 0 3.97-.72 5.3-1.94l-2.6-2a4.8 4.8 0 01-7.18-2.54H1.83v2.07A8 8 0 008.98 17z"/><path fill="#FBBC05" d="M4.5 10.52a4.8 4.8 0 010-3.04V5.41H1.83a8 8 0 000 7.18l2.67-2.07z"/><path fill="#EA4335" d="M8.98 4.18c1.17 0 2.23.4 3.06 1.2l2.3-2.3A8 8 0 001.83 5.4L4.5 7.49a4.77 4.77 0 014.48-3.31z"/></svg>
+        Fortsæt med Google
+      </button>
+
+      <div class="divider">ELLER</div>
+
+      <div style="display:flex;background:#111;border:1px solid #1a1a1a;border-radius:8px;padding:4px;margin-bottom:16px;gap:4px">
+        <button id="tlogin" onclick="setMode('login')" style="flex:1;padding:9px;border:none;border-radius:6px;cursor:pointer;font-family:inherit;font-size:12px;background:#c8ff00;color:#0e0e0e">Log ind</button>
+        <button id="treg" onclick="setMode('register')" style="flex:1;padding:9px;border:none;border-radius:6px;cursor:pointer;font-family:inherit;font-size:12px;background:transparent;color:#555">Opret konto</button>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <input id="aname" class="field" placeholder="Dit navn" style="display:none"/>
+        <input id="aemail" class="field" type="email" placeholder="E-mail" autocomplete="email"/>
+        <input id="apw" class="field" type="password" placeholder="Kodeord (min. 6 tegn)" autocomplete="current-password"/>
+      </div>
+      <div id="aerr" style="margin-top:12px;font-size:12px;color:#ff6b6b;text-align:center;display:none"></div>
+      <button id="abtn" class="btn-p" onclick="doAuth()" style="margin-top:16px">LOG IND</button>
+    </div>
+  </div>
+</div>
+
+<div id="sapp" style="display:none">
+  <div style="padding:16px 20px 0;border-bottom:1px solid #1a1a1a">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+      <div style="font-family:'Bebas Neue';font-size:34px;letter-spacing:3px;color:#c8ff00;line-height:1">LØFT</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <img id="havatar" class="avatar" style="display:none" src="" alt=""/>
+        <span id="hname" style="font-size:11px;color:#777"></span>
+        <button onclick="doSignOut()" style="background:none;border:1px solid #222;border-radius:4px;color:#444;cursor:pointer;font-size:10px;padding:4px 8px;font-family:inherit">UD</button>
+      </div>
+    </div>
+    <div id="hdate" style="font-size:11px;color:#555;margin-bottom:10px"></div>
+    <div style="display:flex;gap:2px">
+      <button class="tab active" id="nav-today"   onclick="showView('today')">Overblik</button>
+      <button class="tab"        id="nav-program" onclick="showView('program')">Program</button>
+      <button class="tab"        id="nav-log"     onclick="showView('log')">Log</button>
+      <button class="tab"        id="nav-history" onclick="showView('history')">Historik</button>
+    </div>
+  </div>
+  <div style="padding:20px;max-width:640px;margin:0 auto">
+    <div id="vtoday"></div>
+    <div id="vprogram" style="display:none"></div>
+    <div id="vlog"     style="display:none"></div>
+    <div id="vhistory" style="display:none"></div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp }                              from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getAuth, onAuthStateChanged,
+         createUserWithEmailAndPassword,
+         signInWithEmailAndPassword,
+         signInWithPopup, signInWithRedirect,
+         getRedirectResult,
+         GoogleAuthProvider,
+         updateProfile, signOut }                     from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+import { getFirestore, collection, doc,
+         setDoc, getDocs, onSnapshot }                from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+const app  = initializeApp({
+  apiKey:"AIzaSyDyyEOWezeMnrcAmCZgtbjI0wh5GpYGkSg",
+  authDomain:"fitness-tracker-3def9.firebaseapp.com",
+  projectId:"fitness-tracker-3def9",
+  storageBucket:"fitness-tracker-3def9.firebasestorage.app",
+  messagingSenderId:"401282898265",
+  appId:"1:401282898265:web:8a7107d3c58c09b0ec1448"
+});
+const auth = getAuth(app);
+const db   = getFirestore(app);
+const googleProvider = new GoogleAuthProvider();
+
+// Register service worker
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js").catch(()=>{});
+}
+
+// Handle redirect result (for mobile Google Sign-In)
+getRedirectResult(auth).then(result => {
+  if (result?.user) handleNewSocialUser(result.user);
+}).catch(e => showAuthError(ERRS[e.code] || e.message));
+
+// ── Programs ─────────────────────────────────────────────────────────────────
+const TDAYS = [0,2,4];
+const PROG = {
+  TRAEK:{
+    label:"TRÆK DAG", color:"#5bc8ff", bgColor:"#0a1a2a",
+    desc:"Fokus på ryg, biceps og bagside skulder",
+    ex:[
+      {id:"seated_row",  name:"Seated Row",         machine:"Rotroning / Roning maskine",         muscles:"Brede rygmuskel (latissimus dorsi) + midtre ryg (rhomboiderne)",           tip:"Sæt dig med ret ryg. Træk albuerne tilbage langs kroppen — forestil dig at du vil stikke dem ind i dine baglommer. Klem skulderbladen sammen i toppen.", sets:4,reps:"12–15",rest:"60s"},
+      {id:"lat_pulldown",name:"Lat Pulldown",        machine:"Pulldown maskine / Kabelmaskine ovenfra", muscles:"Brede rygmuskel (latissimus dorsi) + biceps",                          tip:"Træk stangen ned mod øverste bryst. Hold brystet hævet og læn dig let tilbage.", sets:3,reps:"12–15",rest:"60s"},
+      {id:"face_pull",   name:"Face Pull / Bagdelt", machine:"Kabelmaskine med reb — eller hydraulisk flye maskine omvendt", muscles:"Bageste skulderdel (posterior deltoid) + rotatormanchet + trapezius", tip:"Træk mod dit ansigt med albuerne højt. Gå aldrig på kompromis med formen her.", sets:3,reps:"15–20",rest:"45s"},
+      {id:"bicep_curl",  name:"Bicep Curl",          machine:"Håndvægte / EZ-stang curl",          muscles:"Biceps brachii (tohovede overarmsmuskel)",                               tip:"Hold albuerne stille ved siden af kroppen. Drej håndfladen opad i toppen.", sets:3,reps:"12",rest:"60s"},
+      {id:"hammer_curl", name:"Hammer Curl",         machine:"Håndvægte — neutralt greb",              muscles:"Brachialis (dybere overarmsmuskel) + underarm (brachioradialis)",        tip:"Samme bevægelse som bicep curl, men hold håndfladen neutral hele vejen.", sets:2,reps:"15",rest:"45s"},
+      {id:"plank",       name:"Planke",              machine:"Gulvet — ingen maskine nødvendig",        muscles:"Core: tværgående mavemuskler + bækkenbund + glutes",             tip:"Pres navlen ind mod rygsøjlen. Klem ballerne. Holder du mere end 45s, løft ét ben.", sets:3,reps:"30–45s",rest:"30s",isTime:true}
+    ]
+  },
+  SKUB:{
+    label:"SKUB DAG", color:"#ff8c5b", bgColor:"#2a0a0a",
+    desc:"Fokus på bryst, forreste skulder og triceps",
+    ex:[
+      {id:"chest_press",    name:"Chest Press",     machine:"Brystpres maskine / Bænkpres",              muscles:"Stor brystmuskel (pectoralis major) + forreste skulderdel + triceps",    tip:"Hold skuldrene nede og fast. Forestil dig at du vil klemme brystet sammen når du presser ud.", sets:4,reps:"12–15",rest:"60s"},
+      {id:"shoulder_press", name:"Shoulder Press",  machine:"Skulderpres maskine / håndvægte over hovedet", muscles:"Forreste og midtre skulderdel (anterior + medial deltoid) + triceps",   tip:"Pres direkte op. Undgå at skuldrene trækker op mod ørerne.", sets:3,reps:"12–15",rest:"60s"},
+      {id:"incline_press",  name:"Incline Press",   machine:"Skrå bænkpres maskine — eller kabelflyes",  muscles:"Øvre brystmuskel (clavicular pectoralis) + forreste skulder",           tip:"Fokus på at samle brystet i midten — ikke bare flytte vægt.", sets:3,reps:"12–15",rest:"60s"},
+      {id:"lateral_raise",  name:"Lateral Raises",  machine:"Håndvægte til siden — eller lateral raise maskine", muscles:"Midtre skulderdel (medial deltoid) — giver bredde i skuldrene",       tip:"Løft til skulderhøjde med let bøj i albuen. Gå let i vægt — form er alt.", sets:3,reps:"15–20",rest:"45s"},
+      {id:"tricep_pushdown",name:"Tricep Pushdown", machine:"Kabelmaskine med reb — eller hydraulisk arm extension", muscles:"Triceps brachii (trehovede overarmsmuskel — bagsiden af overarmen)", tip:"Hold albuerne tæt ind til kroppen og pres ned til armen er helt strakt.", sets:3,reps:"12–15",rest:"60s"},
+      {id:"russian_twist",  name:"Russian Twist",   machine:"Gulvet med eller uden vægtskive",              muscles:"Skrå mavemuskler (obliques) + dybe core muskler",                      tip:"Læn dig let bagover med hælene løftet. Roter torso — ikke kun armene.", sets:3,reps:"20 (10/side)",rest:"30s"}
+    ]
+  }
+};
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function getType(ds){
+  const a=new Date("2026-05-17"),t=new Date(ds+"T12:00:00");
+  a.setHours(0,0,0,0);t.setHours(0,0,0,0);
+  if(!TDAYS.includes(t.getDay()))return null;
+  let c=0;const cur=new Date(a);
+  while(cur<=t){if(TDAYS.includes(cur.getDay()))c++;cur.setDate(cur.getDate()+1);}
+  return c%2===1?"TRAEK":"SKUB";
+}
+const tds=d=>d.toISOString().split("T")[0];
+const fmtDate=ds=>new Date(ds+"T12:00:00").toLocaleDateString("da-DK",{weekday:"long",day:"numeric",month:"long"});
+const dayName=ds=>new Date(ds+"T12:00:00").toLocaleDateString("da-DK",{weekday:"long"});
+const cap=s=>s.charAt(0).toUpperCase()+s.slice(1);
+const esc=s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+const iSet=()=>({reps:"",weight:""});
+const buildDef=type=>PROG[type].ex.map(e=>({id:e.id,name:e.name,sets:Array.from({length:e.sets},iSet)}));
+function upcoming(n){
+  const days=[],cur=new Date();let i=0;
+  while(days.length<n&&i<90){const d=new Date(cur);d.setDate(d.getDate()+i);const ds=tds(d);if(TDAYS.includes(d.getDay()))days.push({date:ds,type:getType(ds)});i++;}
+  return days;
+}
+const pill=t=>'<span class="pill '+(t==="TRAEK"?"pill-t":"pill-s")+'">'+(t==="TRAEK"?"TRÆK":"SKUB")+'</span>';
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let CU=null,sessions={},allUsers={},activeDate=tds(new Date());
+let curView="today",logEx=[],logNote="",openEx=null,histUid=null,unsubSess=null;
+
+// ── Window-exposed handlers ───────────────────────────────────────────────────
+window.onReps   = (xi,si,el)=>{logEx[xi].sets[si].reps=el.value.replace(/[^0-9]/g,"");el.value=logEx[xi].sets[si].reps;};
+window.onKg     = (xi,si,el)=>{logEx[xi].sets[si].weight=el.value.replace(/[^0-9]/g,"");el.value=logEx[xi].sets[si].weight;};
+window.onNote   = el=>{logNote=el.value;};
+window.addSet   = xi=>{logEx[xi].sets.push(iSet());renderLog();};
+window.rmSet    = (xi,si)=>{logEx[xi].sets.splice(si,1);renderLog();};
+window.saveLog  = saveLog;
+window.toggleEx = id=>{openEx=openEx===id?null:id;renderProgram();};
+window.setDate  = ds=>{activeDate=ds;if(curView==="program")renderProgram();else if(curView==="log"){initLog();renderLog();}};
+window.showView = showView;
+window.doAuth   = doAuth;
+window.doGoogle = doGoogle;
+window.doSignOut= ()=>signOut(auth);
+window.setMode  = setMode;
+window.switchHist=uid=>{histUid=uid;renderHistory();};
+
+// ── Google Sign-In ────────────────────────────────────────────────────────────
+async function doGoogle(){
+  try {
+    // Try popup first, fall back to redirect on mobile
+    const result = await signInWithPopup(auth, googleProvider).catch(async e => {
+      if (e.code === "auth/popup-blocked" || e.code === "auth/popup-closed-by-user") {
+        await signInWithRedirect(auth, googleProvider);
+        return null;
+      }
+      throw e;
+    });
+    if (result) await handleNewSocialUser(result.user);
+  } catch(e) {
+    showAuthError(ERRS[e.code] || "Google login fejlede. Prøv igen.");
+  }
+}
+
+async function handleNewSocialUser(user) {
+  // Store user profile in Firestore if new
+  const name = user.displayName || user.email.split("@")[0];
+  await setDoc(doc(db,"users",user.uid), {name, email:user.email, createdAt:new Date().toISOString()}, {merge:true});
+}
+
+// ── Email Auth ────────────────────────────────────────────────────────────────
+const ERRS={"auth/invalid-email":"Ugyldig e-mailadresse.","auth/user-not-found":"Ingen bruger med den e-mail.","auth/wrong-password":"Forkert kodeord.","auth/email-already-in-use":"E-mailen er allerede i brug.","auth/weak-password":"Kodeordet skal være mindst 6 tegn.","auth/invalid-credential":"Forkert e-mail eller kodeord."};
+let authMode="login";
+
+function showAuthError(msg){const e=document.getElementById("aerr");e.textContent=msg;e.style.display="block";}
+
+function setMode(m){
+  authMode=m;
+  const on="#c8ff00",off="transparent",bl="#0e0e0e",gr="#555";
+  document.getElementById("aname").style.display=m==="register"?"block":"none";
+  document.getElementById("tlogin").style.cssText="flex:1;padding:9px;border:none;border-radius:6px;cursor:pointer;font-family:inherit;font-size:12px;background:"+(m==="login"?on:off)+";color:"+(m==="login"?bl:gr);
+  document.getElementById("treg").style.cssText  ="flex:1;padding:9px;border:none;border-radius:6px;cursor:pointer;font-family:inherit;font-size:12px;background:"+(m==="register"?on:off)+";color:"+(m==="register"?bl:gr);
+  document.getElementById("abtn").textContent=m==="login"?"LOG IND":"OPRET KONTO";
+  document.getElementById("aerr").style.display="none";
+}
+
+async function doAuth(){
+  const email=document.getElementById("aemail").value.trim();
+  const pw=document.getElementById("apw").value;
+  const name=document.getElementById("aname").value.trim();
+  const btn=document.getElementById("abtn");
+  document.getElementById("aerr").style.display="none";
+  btn.disabled=true;btn.textContent="…";
+  try{
+    if(authMode==="register"){
+      if(!name){showAuthError("Skriv dit navn.");btn.disabled=false;btn.textContent="OPRET KONTO";return;}
+      const c=await createUserWithEmailAndPassword(auth,email,pw);
+      await updateProfile(c.user,{displayName:name});
+      await handleNewSocialUser(c.user);
+    } else {
+      await signInWithEmailAndPassword(auth,email,pw);
+    }
+  } catch(e){
+    showAuthError(ERRS[e.code]||"Noget gik galt. Prøv igen.");
+    btn.disabled=false;btn.textContent=authMode==="login"?"LOG IND":"OPRET KONTO";
+  }
+}
+
+// ── Auth state ────────────────────────────────────────────────────────────────
+onAuthStateChanged(auth, user=>{
+  document.getElementById("sload").style.display="none";
+  if(user){
+    CU=user;histUid=user.uid;
+    document.getElementById("sauth").style.display="none";
+    document.getElementById("sapp").style.display="block";
+    document.getElementById("hname").textContent=user.displayName||user.email.split("@")[0];
+    if(user.photoURL){const av=document.getElementById("havatar");av.src=user.photoURL;av.style.display="block";}
+    updateHdr();startListen();loadUsers();showView("today");
+  } else {
+    CU=null;
+    if(unsubSess){unsubSess();unsubSess=null;}
+    document.getElementById("sapp").style.display="none";
+    document.getElementById("sauth").style.display="block";
+  }
+});
+
+function startListen(){
+  if(unsubSess)unsubSess();
+  unsubSess=onSnapshot(collection(db,"users",CU.uid,"sessions"),snap=>{
+    sessions={};snap.forEach(d=>{sessions[d.id]=d.data();});
+    if(curView==="today")renderToday();
+    if(curView==="history"&&histUid===CU.uid)renderHistContent(sessions);
+  });
+}
+async function loadUsers(){const snap=await getDocs(collection(db,"users"));allUsers={};snap.forEach(d=>{allUsers[d.id]=d.data();});}
+function updateHdr(){
+  const today=tds(new Date()),type=getType(today),isTrain=TDAYS.includes(new Date(today+"T12:00:00").getDay());
+  document.getElementById("hdate").innerHTML=cap(fmtDate(today))+" — "
+    +(isTrain?'<span style="color:#c8ff00">Træningsdag · '+(type==="TRAEK"?"TRÆK":"SKUB")+"</span>":'<span style="color:#333">Hviledag</span>');
+}
+
+// ── View ──────────────────────────────────────────────────────────────────────
+function showView(v){
+  curView=v;
+  ["today","program","log","history"].forEach(n=>{
+    document.getElementById("v"+n).style.display=n===v?"block":"none";
+    const t=document.getElementById("nav-"+n);if(t)t.className="tab"+(n===v?" active":"");
+  });
+  if(v==="today")renderToday();
+  else if(v==="program")renderProgram();
+  else if(v==="log"){initLog();renderLog();}
+  else if(v==="history")renderHistory();
+}
+
+function dateChips(){
+  const today=tds(new Date());
+  let h='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:20px">';
+  upcoming(5).forEach(u=>{
+    const act=u.date===activeDate,lbl=u.type==="TRAEK"?"TRÆK":"SKUB",clr=u.type==="TRAEK"?"#2a6a9a":"#9a4a2a";
+    h+='<div class="chip'+(act?" active":"")+'" onclick="setDate(\'' +u.date+ '\')">'+(u.date===today?"I dag":cap(dayName(u.date)))+' <span style="color:'+clr+';font-size:10px">'+lbl+'</span></div>';
+  });
+  return h+'</div>';
+}
+
+function renderToday(){
+  const today=tds(new Date()),isTrain=TDAYS.includes(new Date(today+"T12:00:00").getDay());
+  let h='<div style="margin-bottom:24px"><div style="font-size:10px;color:#444;letter-spacing:2px;margin-bottom:10px">KOMMENDE TRÆNING</div>';
+  upcoming(8).forEach(u=>{
+    const done=!!sessions[u.date],isT=u.date===today;
+    h+='<div class="urow" style="'+(isT?"background:#151d00;border-color:#c8ff0040":"")+'">'
+      +'<div style="width:6px;height:6px;border-radius:50%;background:'+(done||isT?"#c8ff00":"#222")+';flex-shrink:0"></div>'
+      +'<span style="flex:1;font-size:12px;color:'+(isT?"#e0dcd4":"#666")+'">'+(isT?"I dag":cap(fmtDate(u.date)))+'</span>'
+      +pill(u.type)+(done?'<span style="font-size:10px;color:#c8ff00">✓</span>':"")+'</div>';
+  });
+  const tot=Object.keys(sessions).length,tr=Object.values(sessions).filter(s=>s.type==="TRAEK").length;
+  h+='</div><div style="margin-bottom:24px"><div style="font-size:10px;color:#444;letter-spacing:2px;margin-bottom:10px">MINE STATS</div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">';
+  [[tot,"Sessions"],[tr,"Træk"],[tot-tr,"Skub"]].forEach(([v,l])=>{
+    h+='<div class="sbox"><div style="font-family:\'Bebas Neue\';font-size:32px;color:#c8ff00;line-height:1">'+v+'</div><div style="font-size:10px;color:#444;letter-spacing:1.5px;margin-top:3px">'+l.toUpperCase()+'</div></div>';
+  });
+  h+='</div></div>';
+  if(isTrain)h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><button class="btn-g" onclick="activeDate=\''+today+'\';showView(\'program\')">SE PROGRAM →</button><button class="btn-p" onclick="activeDate=\''+today+'\';showView(\'log\')">LOG TRÆNING →</button></div>';
+  document.getElementById("vtoday").innerHTML=h;
+}
+
+function renderProgram(){
+  const type=getType(activeDate);
+  let h=dateChips();
+  if(!type){document.getElementById("vprogram").innerHTML=h+'<div style="color:#333;font-size:13px">Ikke en træningsdag.</div>';return;}
+  const p=PROG[type];
+  h+='<div style="margin-bottom:20px"><div style="font-family:\'Bebas Neue\';font-size:28px;letter-spacing:3px;color:'+p.color+';margin-bottom:3px">'+p.label+'</div><div style="font-size:12px;color:#555">'+esc(p.desc)+'</div></div>';
+  p.ex.forEach((ex,i)=>{
+    const open=openEx===ex.id;
+    h+='<div class="pcard" style="border-color:'+(open?p.color+'55':'#1a1a1a')+'"><div class="phdr" style="background:'+(open?p.bgColor:'#111')+'" onclick="toggleEx(\''+ex.id+'\')"><span style="font-family:\'Bebas Neue\';font-size:12px;color:'+p.color+';width:20px;flex-shrink:0">'+(i+1)+'</span><div style="flex:1;min-width:0"><div style="font-size:13px;color:#e0dcd4">'+esc(ex.name)+'</div><div style="font-size:10px;color:#444;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(ex.machine)+'</div></div><div style="text-align:right;flex-shrink:0;margin-right:8px"><div style="font-size:12px;color:#777">'+ex.sets+'×'+esc(ex.reps)+'</div><div style="font-size:10px;color:#333">'+ex.rest+'</div></div><span style="color:#333;font-size:12px">'+(open?"▲":"▼")+'</span></div>';
+    if(open)h+='<div style="background:#0c0c0c;padding:14px 16px;border-top:1px solid '+p.color+'22"><div style="margin-bottom:12px"><div style="font-size:10px;color:#444;letter-spacing:1.5px;margin-bottom:5px">MASKINE / UDSTYR</div><div style="font-size:12px;color:#777;line-height:1.6">'+esc(ex.machine)+'</div></div><div style="margin-bottom:12px"><div style="font-size:10px;color:#444;letter-spacing:1.5px;margin-bottom:5px">MUSKLER DER TRÆNES</div><div style="font-size:12px;color:'+p.color+';line-height:1.6;opacity:.85">'+esc(ex.muscles)+'</div></div><div><div style="font-size:10px;color:#444;letter-spacing:1.5px;margin-bottom:5px">TEKNIK & TIPS</div><div style="font-size:12px;color:#888;line-height:1.8">'+esc(ex.tip)+'</div></div></div>';
+    h+='</div>';
+  });
+  h+='<button class="btn-p" onclick="showView(\'log\')" style="margin-top:12px">START LOG →</button>';
+  document.getElementById("vprogram").innerHTML=h;
+}
+
+function initLog(){
+  const type=getType(activeDate);
+  if(!type){logEx=[];logNote="";return;}
+  const ex=sessions[activeDate];
+  if(ex){logEx=JSON.parse(JSON.stringify(ex.exercises||[]));logNote=ex.note||"";}
+  else{logEx=buildDef(type);logNote="";}
+}
+
+function renderLog(){
+  const type=getType(activeDate);
+  let h=dateChips();
+  if(!type){document.getElementById("vlog").innerHTML=h+'<div style="color:#333;font-size:13px">Ikke en træningsdag.</div>';return;}
+  const p=PROG[type];
+  h+='<div style="display:flex;align-items:baseline;gap:10px;margin-bottom:18px"><span style="font-family:\'Bebas Neue\';font-size:24px;letter-spacing:2px;color:'+p.color+'">'+p.label+'</span><span style="font-size:11px;color:#444">'+cap(fmtDate(activeDate))+'</span></div>';
+  logEx.forEach((ex,xi)=>{
+    const def=p.ex.find(e=>e.id===ex.id)||{};
+    h+='<div class="excard"><div style="margin-bottom:10px"><div style="font-size:13px;color:#e0dcd4">'+esc(ex.name)+'</div>'+(def.muscles?'<div style="font-size:10px;color:'+p.color+';opacity:.7;margin-top:2px">'+esc(def.muscles)+'</div>':"")+(def.reps?'<div style="font-size:10px;color:#333;margin-top:2px">Mål: '+def.sets+' sæt · '+esc(def.reps)+' reps · '+def.rest+' hvil</div>':"")+'</div><div style="display:grid;grid-template-columns:28px 1fr 1fr 28px;gap:5px;margin-bottom:6px"><span></span><span style="font-size:10px;color:#444;text-align:center;letter-spacing:1px">REPS</span><span style="font-size:10px;color:#444;text-align:center;letter-spacing:1px">'+(def.isTime?"SEK":"KG")+'</span><span></span></div>';
+    ex.sets.forEach((set,si)=>{
+      h+='<div style="display:grid;grid-template-columns:28px 1fr 1fr 28px;gap:5px;margin-bottom:5px;align-items:center"><span style="font-size:11px;color:#333;text-align:center">S'+(si+1)+'</span><input class="sinput" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="—" value="'+esc(set.reps)+'" oninput="onReps('+xi+','+si+',this)"><input class="sinput" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="—" value="'+esc(set.weight)+'" oninput="onKg('+xi+','+si+',this)"><button class="rmb" onclick="rmSet('+xi+','+si+')">×</button></div>';
+    });
+    h+='<button class="asb" onclick="addSet('+xi+')">+ SÆT</button></div>';
+  });
+  h+='<textarea class="field" placeholder="Note til træningen (valgfrit)..." rows="2" style="resize:vertical;margin-bottom:10px;color:#777" oninput="onNote(this)">'+esc(logNote)+'</textarea><button class="btn-p" id="savebtn" onclick="saveLog()">GEM TRÆNING</button>';
+  document.getElementById("vlog").innerHTML=h;
+}
+
+async function saveLog(){
+  const type=getType(activeDate),btn=document.getElementById("savebtn");
+  if(!type||!CU)return;
+  const data={date:activeDate,type,exercises:logEx,note:logNote,savedAt:new Date().toISOString(),userName:CU.displayName||CU.email.split("@")[0]};
+  if(btn){btn.disabled=true;btn.textContent="…";}
+  await setDoc(doc(db,"users",CU.uid,"sessions",activeDate),data);
+  if(btn){btn.textContent="Gemt ✓";setTimeout(()=>{if(btn){btn.disabled=false;btn.textContent="GEM TRÆNING";}},2000);}
+}
+
+function renderHistory(){
+  const uids=Object.keys(allUsers);
+  let h="";
+  if(uids.length>1){h='<div style="margin-bottom:20px">';uids.forEach(uid=>{const act=uid===histUid,name=uid===CU.uid?"Mine":(allUsers[uid].name||allUsers[uid].email);h+='<span class="chip'+(act?" active":"")+'" onclick="switchHist(\''+uid+'\')">'+esc(name)+'</span>';});h+='</div>';}
+  h+='<div id="hcontent"></div>';
+  document.getElementById("vhistory").innerHTML=h;
+  loadHist();
+}
+async function loadHist(){
+  let data=sessions;
+  if(histUid!==CU.uid){const snap=await getDocs(collection(db,"users",histUid,"sessions"));data={};snap.forEach(d=>{data[d.id]=d.data();});}
+  renderHistContent(data);
+}
+function renderHistContent(data){
+  const el=document.getElementById("hcontent");if(!el)return;
+  const dates=Object.keys(data).sort().reverse();
+  if(!dates.length){el.innerHTML='<div style="color:#333;font-size:13px;text-align:center;padding:40px 0">Ingen sessioner endnu.</div>';return;}
+  let h="";
+  dates.forEach(date=>{
+    const s=data[date],tot=(s.exercises||[]).reduce((a,e)=>a+(e.sets||[]).length,0);
+    h+='<div class="hrow"><div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><span style="font-size:13px;color:#e0dcd4;flex:1">'+cap(fmtDate(date))+'</span>'+(s.type?pill(s.type):"")+'</div>';
+    (s.exercises||[]).forEach(ex=>{const maxKg=(ex.sets||[]).filter(s=>s.weight).map(s=>parseFloat(s.weight)||0);h+='<div style="display:flex;gap:8px;align-items:center;margin-bottom:3px"><span style="font-size:12px;color:#555;flex:1">'+esc(ex.name)+'</span><span style="font-size:11px;color:#333">'+(ex.sets||[]).length+' sæt'+(maxKg.length?' · '+Math.max(...maxKg)+' kg maks':'')+'</span></div>';});
+    if(s.note)h+='<div style="margin-top:8px;font-size:11px;color:#3a3a3a;border-top:1px solid #181818;padding-top:8px">'+esc(s.note)+'</div>';
+    h+='<div style="margin-top:8px;font-size:10px;color:#2a2a2a;letter-spacing:1px">'+(s.exercises||[]).length+' ØVELSER · '+tot+' SÆTS</div></div>';
+  });
+  el.innerHTML=h;
+}
+</script>
+</body>
+</html>

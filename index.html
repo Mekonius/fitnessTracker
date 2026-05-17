@@ -110,6 +110,7 @@ input:focus,textarea:focus{border-color:#c8ff00!important}
     <div id="vlog"     style="display:none"></div>
     <div id="vhistory" style="display:none"></div>
     <div id="vsettings" style="display:none"></div>
+    <div id="vbuilder" style="display:none"></div>
   </div>
 </div>
 
@@ -123,7 +124,7 @@ import { getAuth, onAuthStateChanged,
          GoogleAuthProvider,
          updateProfile, signOut }                     from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
 import { getFirestore, collection, doc,
-         setDoc, getDoc, getDocs, onSnapshot }        from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+         setDoc, getDoc, getDocs, deleteDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 const app  = initializeApp({
   apiKey:"AIzaSyDyyEOWezeMnrcAmCZgtbjI0wh5GpYGkSg",
@@ -151,6 +152,67 @@ getRedirectResult(auth).then(result => {
 const PRESETS = {
   "PPL":       {1:"SKUB",3:"TRAEK",5:"BEN"},
   "PUSH/PULL": {1:"SKUB",4:"TRAEK"}
+};
+const CATALOG = {
+  "RYG":[
+    {id:"seated_row",   name:"Seated Row",        machine:"Rotroning / Roning maskine",        muscles:"Brede rygmuskel + midtre ryg",           tip:"Træk albuerne bagud langs kroppen. Klem skulderbladen.",          sets:4,reps:"12-15",rest:"60s"},
+    {id:"lat_pulldown", name:"Lat Pulldown",       machine:"Pulldown maskine",                  muscles:"Latissimus dorsi + biceps",              tip:"Træk ned mod øverste bryst. Læn dig let tilbage.",               sets:3,reps:"12-15",rest:"60s"},
+    {id:"bent_row",     name:"Bent-over Row",      machine:"Stang / håndvægte",                 muscles:"Brede rygmuskel + rhomboiderne + biceps",tip:"Hold ryggen ret. Træk mod navlen.",                              sets:4,reps:"10-12",rest:"75s"},
+    {id:"cable_row",    name:"Cable Row",           machine:"Kabelmaskine",                      muscles:"Midtre ryg + rhomboiderne",              tip:"Ret ryg. Træk albuerne direkte bagud.",                          sets:3,reps:"12-15",rest:"60s"},
+    {id:"pullup",       name:"Pull-up / Chin-up",  machine:"Pull-up stang",                     muscles:"Latissimus dorsi + biceps",              tip:"Fuld bevægelsesbane — hæng helt ud i bunden.",                   sets:3,reps:"Max",rest:"90s"},
+    {id:"deadlift",     name:"Deadlift",            machine:"Stang / trap bar",                  muscles:"Nedre ryg + glutes + hamstrings + traps",tip:"Neutral ryg. Drivkraft fra hoften — ikke ryggen.",               sets:3,reps:"5-8",rest:"120s"},
+    {id:"face_pull",    name:"Face Pull",           machine:"Kabelmaskine med reb",              muscles:"Bageste skulder + rotatormanchet",       tip:"Træk mod ansigtet med albuerne højt.",                           sets:3,reps:"15-20",rest:"45s"},
+    {id:"shrug",        name:"Shrug",               machine:"Håndvægte / stang",                 muscles:"Øvre trapezius",                         tip:"Løft skuldrene direkte op. Hold 1 sekund.",                      sets:3,reps:"15",rest:"45s"}
+  ],
+  "BRYST":[
+    {id:"chest_press",  name:"Chest Press",        machine:"Brystpres maskine / bænkpres",       muscles:"Pectoralis major + triceps + forreste skulder",tip:"Hold skuldrene nede. Klem brystet.",                    sets:4,reps:"12-15",rest:"60s"},
+    {id:"incline_press",name:"Incline Press",       machine:"Skrå bænkpres / maskine",            muscles:"Øvre bryst + forreste skulder",         tip:"Fokus øvre bryst. Klem i toppen.",                               sets:3,reps:"12-15",rest:"60s"},
+    {id:"decline_press",name:"Decline Press",       machine:"Nedadgående bænkpres",               muscles:"Nedre bryst + triceps",                  tip:"Kontrolleret ned. Fokus nedre bryst.",                           sets:3,reps:"12-15",rest:"60s"},
+    {id:"pec_deck",     name:"Pec Deck / Butterfly",machine:"Pec Deck maskine",                   muscles:"Indre bryst",                            tip:"Let bøj i albuerne. Klem brystet i midten.",                     sets:3,reps:"15",rest:"45s"},
+    {id:"cable_fly",    name:"Cable Fly",           machine:"Kabelmaskine",                       muscles:"Pectoralis major + forreste skulder",    tip:"Bøjede arme. Tænk på at kramme nogen.",                          sets:3,reps:"15",rest:"45s"},
+    {id:"pushup",       name:"Push-up",             machine:"Ingen — kropsvægt",                  muscles:"Bryst + triceps + skulder",              tip:"Krop som et bræt. Brystet til gulvet.",                          sets:3,reps:"Max",rest:"60s"},
+    {id:"dips_chest",   name:"Dips (brystfokus)",  machine:"Dips stativ",                        muscles:"Nedre bryst + triceps",                  tip:"Læn dig fremover for mere brystaktivering.",                     sets:3,reps:"Max",rest:"75s"}
+  ],
+  "SKULDER":[
+    {id:"shoulder_press",name:"Shoulder Press",    machine:"Skulderpres maskine / håndvægte",    muscles:"Forreste + midtre skulderdel + triceps",  tip:"Pres direkte op. Skuldrene væk fra ørerne.",                    sets:3,reps:"12-15",rest:"60s"},
+    {id:"lateral_raise", name:"Lateral Raises",    machine:"Håndvægte / kabelmaskine",           muscles:"Midtre skulderdel — giver bredde",        tip:"Løft til skulderhøjde. Form > vægt.",                            sets:3,reps:"15-20",rest:"45s"},
+    {id:"front_raise",   name:"Front Raises",      machine:"Håndvægte / skive",                  muscles:"Forreste skulderdel",                    tip:"Løft til øjenhøjde. Let bøj i albuen.",                          sets:3,reps:"12-15",rest:"45s"},
+    {id:"upright_row",   name:"Upright Row",        machine:"Stang / kabelmaskine",               muscles:"Midtre skulder + øvre trapezius",        tip:"Albuerne højere end hænderne.",                                  sets:3,reps:"12-15",rest:"60s"},
+    {id:"arnold_press",  name:"Arnold Press",       machine:"Håndvægte",                          muscles:"Alle tre skulderdele",                   tip:"Start håndfladen indad, roter udad under pressen.",              sets:3,reps:"12",rest:"60s"}
+  ],
+  "BICEPS":[
+    {id:"bicep_curl",       name:"Bicep Curl",       machine:"Håndvægte / EZ-stang",             muscles:"Biceps brachii",                         tip:"Albuerne stille. Drej håndfladen op i toppen.",                  sets:3,reps:"12",rest:"60s"},
+    {id:"hammer_curl",      name:"Hammer Curl",      machine:"Håndvægte — neutralt greb",         muscles:"Brachialis + underarm",                  tip:"Neutral hånd hele vejen.",                                       sets:2,reps:"15",rest:"45s"},
+    {id:"cable_curl",       name:"Cable Curl",       machine:"Kabelmaskine (lav)",                muscles:"Biceps — konstant spænding",             tip:"Albuerne foran kroppen. Konstant spænding.",                     sets:3,reps:"12-15",rest:"45s"},
+    {id:"preacher_curl",    name:"Preacher Curl",    machine:"Preacher curl bænk / maskine",      muscles:"Biceps (nedre del)",                     tip:"Kontrolleret ned. Fuld stræk i bunden.",                         sets:3,reps:"12",rest:"60s"},
+    {id:"concentration_curl",name:"Concentration Curl",machine:"Håndvægt + bænk",               muscles:"Biceps (peak)",                          tip:"Albuen mod indersiden af knæet. Fuld rotation.",                 sets:2,reps:"12/arm",rest:"45s"}
+  ],
+  "TRICEPS":[
+    {id:"tricep_pushdown",  name:"Tricep Pushdown",  machine:"Kabelmaskine med reb",              muscles:"Triceps brachii",                        tip:"Albuerne tæt. Pres til fuld stræk.",                             sets:3,reps:"12-15",rest:"60s"},
+    {id:"overhead_ext",     name:"Overhead Extension",machine:"Kabelmaskine / håndvægt",         muscles:"Lange hoved af triceps",                 tip:"Albuerne tæt. Kontrolleret ned bag hovedet.",                    sets:3,reps:"12-15",rest:"60s"},
+    {id:"skull_crusher",    name:"Skull Crusher",    machine:"EZ-stang / bænk",                   muscles:"Triceps — alle tre hoveder",              tip:"Albuerne stille og peget mod loftet.",                           sets:3,reps:"12",rest:"60s"},
+    {id:"dips_tri",         name:"Tricep Dips",      machine:"Dips stativ / bænk",                muscles:"Triceps + nedre bryst",                  tip:"Lodret krop for max triceps.",                                   sets:3,reps:"Max",rest:"60s"},
+    {id:"close_grip",       name:"Close-Grip Press", machine:"Stang / bænk",                      muscles:"Triceps + indre bryst",                  tip:"Smal greb — skulderbredde. Pres med triceps.",                   sets:3,reps:"10-12",rest:"75s"}
+  ],
+  "BEN":[
+    {id:"squat",            name:"Squat / Benpres",  machine:"Squat rack / benpres maskine",      muscles:"Quadriceps + glutes + hamstrings",       tip:"Ret ryg. Knæene følger tæerne. Ned til 90°.",                    sets:4,reps:"10-12",rest:"90s"},
+    {id:"leg_press",        name:"Leg Press",         machine:"Benpres maskine",                   muscles:"Quadriceps + glutes",                    tip:"Skulderbredde. Knæene ikke ind.",                                sets:3,reps:"12-15",rest:"60s"},
+    {id:"romanian_dl",      name:"Romanian Deadlift", machine:"Håndvægte / stang",                muscles:"Hamstrings + glutes + nedre ryg",        tip:"Hoften bagud — ikke ned. Mærk strækket.",                        sets:3,reps:"12",rest:"60s"},
+    {id:"leg_curl",         name:"Leg Curl",          machine:"Leg curl maskine",                  muscles:"Hamstrings (baglår)",                    tip:"Hofterne nede. Fuld bevægelsesbane.",                            sets:3,reps:"12-15",rest:"60s"},
+    {id:"leg_extension",    name:"Leg Extension",     machine:"Leg extension maskine",             muscles:"Quadriceps (forlår)",                    tip:"Fuld stræk. Kontrolleret ned.",                                  sets:3,reps:"15",rest:"45s"},
+    {id:"calf_raise",       name:"Calf Raises",       machine:"Calf raise maskine / trappetrin",   muscles:"Gastrocnemius + soleus (læg)",           tip:"Helt op og helt ned. Hold 1 sek i toppen.",                      sets:4,reps:"20",rest:"30s"},
+    {id:"lunge",            name:"Lunges",            machine:"Håndvægte / kropsvægt",             muscles:"Quadriceps + glutes + balance",          tip:"Stort skridt frem. Bagknæet næsten til gulvet.",                 sets:3,reps:"12/ben",rest:"60s"},
+    {id:"hip_thrust",       name:"Hip Thrust",        machine:"Bænk + stang / maskine",            muscles:"Glutes (primært) + hamstrings",          tip:"Klem ballerne i toppen. Hold 1 sek.",                            sets:4,reps:"12-15",rest:"60s"},
+    {id:"bulgarian",        name:"Bulgarian Split Squat",machine:"Bænk + håndvægte",              muscles:"Quadriceps + glutes (unilateral)",       tip:"Forreste fod langt frem. Torso let fremover.",                   sets:3,reps:"10/ben",rest:"75s"}
+  ],
+  "CORE":[
+    {id:"plank",            name:"Planke",            machine:"Gulvet",                            muscles:"Core: tværgående mavemuskel + glutes",  tip:"Pres navlen ind. Klem ballerne. Hæv ét ben ved +45s.",           sets:3,reps:"30-45s",rest:"30s",isTime:true},
+    {id:"russian_twist",    name:"Russian Twist",     machine:"Gulvet med eller uden skive",       muscles:"Skrå mavemuskler (obliques)",            tip:"Roter torso — ikke kun armene.",                                 sets:3,reps:"20 (10/side)",rest:"30s"},
+    {id:"leg_raise",        name:"Leg Raise",         machine:"Bænk / hængende",                   muscles:"Nedre mavemuskler",                      tip:"Lad ikke ryggen løfte fra bænken.",                              sets:3,reps:"12-15",rest:"45s"},
+    {id:"crunch",           name:"Crunches",          machine:"Gulvet / kabelmaskine",             muscles:"Rectus abdominis",                       tip:"Løft skuldrene — ikke nakken. Ekspirer i toppen.",               sets:3,reps:"20",rest:"30s"},
+    {id:"side_plank",       name:"Side Planke",       machine:"Gulvet",                            muscles:"Obliques + core stabilisatorer",         tip:"Hofterne oppe. Krop i én ret linje.",                            sets:3,reps:"30s/side",rest:"30s",isTime:true},
+    {id:"ab_wheel",         name:"Ab Wheel / Rollout",machine:"Ab wheel",                          muscles:"Hele core + lats",                       tip:"Stram core hårdt. Gå kun så langt ud du kan kontrollere.",       sets:3,reps:"10",rest:"60s"}
+  ]
 };
 const PROG = {
   TRAEK:{
@@ -201,7 +263,14 @@ const dayName=ds=>new Date(ds+"T12:00:00").toLocaleDateString("da-DK",{weekday:"
 const cap=s=>s.charAt(0).toUpperCase()+s.slice(1);
 const esc=s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
 const iSet=()=>({reps:"",weight:""});
-const buildDef=type=>PROG[type].ex.map(e=>({id:e.id,name:e.name,sets:Array.from({length:e.sets},iSet)}));
+function getProgram(type){
+  if(!type)return null;
+  if(PROG[type])return PROG[type];
+  const cp=customPrograms[type];
+  if(cp)return{label:cp.name.toUpperCase(),color:cp.color||"#c8ff00",bgColor:"#1e2a00",desc:"",ex:cp.exercises||[]};
+  return null;
+}
+const buildDef=type=>{const p=getProgram(type);return p?p.ex.map(e=>({id:e.id,name:e.name,sets:Array.from({length:e.sets||3},iSet)})):[];};
 function upcoming(n){
   const days=[],cur=new Date();let i=0;
   while(days.length<n&&i<90){const d=new Date(cur);d.setDate(d.getDate()+i);const ds=tds(d);const type=getType(ds);if(type)days.push({date:ds,type});i++;}
@@ -210,8 +279,9 @@ function upcoming(n){
 const pill=t=>'<span class="pill '+(t==="TRAEK"?"pill-t":t==="SKUB"?"pill-s":"pill-b")+'">'+(t==="TRAEK"?"TRÆK":t==="SKUB"?"SKUB":"BEN")+'</span>';
 
 // ── State ─────────────────────────────────────────────────────────────────────
-let CU=null,sessions={},allUsers={},activeDate=tds(new Date()),userSplit={};
+let CU=null,sessions={},allUsers={},activeDate=tds(new Date()),userSplit={},customPrograms={};
 let curView="today",logEx=[],logNote="",openEx=null,histUid=null,unsubSess=null;
+let activeDaySelect=null,editingProgram=null,builderMode=null,catalogTab="RYG";
 
 // ── Window-exposed handlers ───────────────────────────────────────────────────
 window.onReps   = (xi,si,el)=>{logEx[xi].sets[si].reps=el.value.replace(/[^0-9]/g,"");el.value=logEx[xi].sets[si].reps;};
@@ -229,8 +299,18 @@ window.doSignOut= ()=>signOut(auth);
 window.setMode  = setMode;
 window.switchHist=uid=>{histUid=uid;renderHistory();};
 window.applyPreset=applyPreset;
-window.toggleDay=toggleDay;
 window.saveSplit=saveSplit;
+window.selectDay=selectDay;
+window.setDayType=setDayType;
+window.editProgram=editProgram;
+window.deleteCustomProgram=deleteCustomProgram;
+window.showCatalog=showCatalog;
+window.showCustomForm=showCustomForm;
+window.setCatalogTab=setCatalogTab;
+window.addCatalogEx=addCatalogEx;
+window.removeBuilderEx=removeBuilderEx;
+window.addCustomEx=addCustomEx;
+window.saveCustomProgram=saveCustomProgram;
 
 // ── Google Sign-In ────────────────────────────────────────────────────────────
 async function doGoogle(){
@@ -329,7 +409,7 @@ function updateHdr(){
 // ── View ──────────────────────────────────────────────────────────────────────
 function showView(v){
   curView=v;
-  ["today","program","log","history","settings"].forEach(n=>{
+  ["today","program","log","history","settings","builder"].forEach(n=>{
     document.getElementById("v"+n).style.display=n===v?"block":"none";
     const t=document.getElementById("nav-"+n);if(t)t.className="tab"+(n===v?" active":"");
   });
@@ -338,6 +418,7 @@ function showView(v){
   else if(v==="log"){initLog();renderLog();}
   else if(v==="history")renderHistory();
   else if(v==="settings")renderSettings();
+  else if(v==="builder"){editingProgram=editingProgram||{name:"",exercises:[],color:"#c8ff00"};builderMode=null;renderBuilder();}
 }
 
 function dateChips(){
@@ -377,7 +458,8 @@ function renderProgram(){
   const type=getType(activeDate);
   let h=dateChips();
   if(!type){document.getElementById("vprogram").innerHTML=h+'<div style="color:#333;font-size:13px">Ikke en træningsdag.</div>';return;}
-  const p=PROG[type];
+  const p=getProgram(type);
+  if(!p){document.getElementById("vprogram").innerHTML=h+'<div style="color:#333;font-size:13px">Program ikke fundet.</div>';return;}
   h+='<div style="margin-bottom:20px"><div style="font-family:\'Bebas Neue\';font-size:28px;letter-spacing:3px;color:'+p.color+';margin-bottom:3px">'+p.label+'</div><div style="font-size:12px;color:#555">'+esc(p.desc)+'</div></div>';
   p.ex.forEach((ex,i)=>{
     const open=openEx===ex.id;
@@ -401,7 +483,8 @@ function renderLog(){
   const type=getType(activeDate);
   let h=dateChips();
   if(!type){document.getElementById("vlog").innerHTML=h+'<div style="color:#333;font-size:13px">Ikke en træningsdag.</div>';return;}
-  const p=PROG[type];
+  const p=getProgram(type);
+  if(!p){document.getElementById("vlog").innerHTML=h+'<div style="color:#333;font-size:13px">Program ikke fundet.</div>';return;}
   h+='<div style="display:flex;align-items:baseline;gap:10px;margin-bottom:18px"><span style="font-family:\'Bebas Neue\';font-size:24px;letter-spacing:2px;color:'+p.color+'">'+p.label+'</span><span style="font-size:11px;color:#444">'+cap(fmtDate(activeDate))+'</span></div>';
   logEx.forEach((ex,xi)=>{
     const def=p.ex.find(e=>e.id===ex.id)||{};
@@ -439,9 +522,14 @@ async function loadHist(){
 }
 // ── Settings / Split ─────────────────────────────────────────────────────────
 async function loadSettings(){
-  const snap=await getDoc(doc(db,"users",CU.uid,"settings","split"));
-  if(snap.exists()&&snap.data().days&&Object.keys(snap.data().days).length){
-    userSplit=snap.data().days;
+  const [settingsSnap,programsSnap]=await Promise.all([
+    getDoc(doc(db,"users",CU.uid,"settings","split")),
+    getDocs(collection(db,"users",CU.uid,"programs"))
+  ]);
+  customPrograms={};
+  programsSnap.forEach(d=>{customPrograms[d.id]=d.data();});
+  if(settingsSnap.exists()&&settingsSnap.data().days&&Object.keys(settingsSnap.data().days).length){
+    userSplit=settingsSnap.data().days;
     showView("today");
   } else {
     userSplit={};
@@ -450,45 +538,166 @@ async function loadSettings(){
 }
 async function saveSplit(){
   await setDoc(doc(db,"users",CU.uid,"settings","split"),{days:userSplit});
-  updateHdr();showView("today");
+  activeDaySelect=null;updateHdr();showView("today");
 }
-function applyPreset(name){userSplit={...PRESETS[name]};renderSettings();}
-function toggleDay(d){
-  const order=[null,"TRAEK","SKUB","BEN"];
-  const cur=userSplit[d]||null;
-  const next=order[(order.indexOf(cur)+1)%order.length];
-  if(next===null)delete userSplit[d];else userSplit[d]=next;
-  renderSettings();
+function applyPreset(name){userSplit={...PRESETS[name]};activeDaySelect=null;renderSettings();}
+function selectDay(d){activeDaySelect=activeDaySelect===d?null:d;renderSettings();}
+function setDayType(d,type){if(type===null)delete userSplit[d];else userSplit[d]=type;renderSettings();}
+function editProgram(id){editingProgram={...customPrograms[id],id};builderMode=null;showView("builder");}
+async function deleteCustomProgram(id){
+  Object.keys(userSplit).forEach(d=>{if(userSplit[d]===id)delete userSplit[d];});
+  await Promise.all([deleteDoc(doc(db,"users",CU.uid,"programs",id)),setDoc(doc(db,"users",CU.uid,"settings","split"),{days:userSplit})]);
+  delete customPrograms[id];renderSettings();
 }
 function renderSettings(){
-  const DAY_NAMES=["SØN","MAN","TIR","ONS","TOR","FRE","LØR"];
-  const TYPE_LABELS={TRAEK:"TRÆK",SKUB:"SKUB",BEN:"BEN"};
-  const TYPE_COLORS={TRAEK:"#5bc8ff",SKUB:"#ff8c5b",BEN:"#a8ff78"};
-  const TYPE_BG={TRAEK:"#0a1a2a",SKUB:"#2a0a0a",BEN:"#0a2a0a"};
+  const DN=["SØN","MAN","TIR","ONS","TOR","FRE","LØR"];
+  const DNF=["Søndag","Mandag","Tirsdag","Onsdag","Torsdag","Fredag","Lørdag"];
+  const TC={TRAEK:"#5bc8ff",SKUB:"#ff8c5b",BEN:"#a8ff78"};
+  const TB={TRAEK:"#0a1a2a",SKUB:"#2a0a0a",BEN:"#0a2a0a"};
+  const TL={TRAEK:"TRÆK",SKUB:"SKUB",BEN:"BEN"};
   const hasSplit=Object.keys(userSplit).length>0;
   let h='<div style="font-size:10px;color:#444;letter-spacing:2px;margin-bottom:20px">DIT TRÆNINGSSPLIT</div>';
-  if(!hasSplit)h+='<div style="font-size:13px;color:#555;margin-bottom:20px;line-height:1.8">Vælg et preset for at komme hurtigt i gang, eller byg dit eget split nedenfor.</div>';
-  h+='<div style="margin-bottom:24px"><div style="font-size:10px;color:#444;letter-spacing:1.5px;margin-bottom:10px">HURTIG OPSÆTNING</div><div style="display:flex;gap:8px">';
+  if(!hasSplit)h+='<div style="font-size:13px;color:#555;margin-bottom:20px;line-height:1.8">Vælg et preset eller byg dit eget split — tryk på en dag for at vælge program.</div>';
+  h+='<div style="margin-bottom:20px"><div style="font-size:10px;color:#444;letter-spacing:1.5px;margin-bottom:10px">HURTIG OPSÆTNING</div><div style="display:flex;gap:8px">';
   h+='<button class="btn-g" style="width:auto;padding:10px 18px" onclick="applyPreset(\'PPL\')">PPL · 3 dage</button>';
   h+='<button class="btn-g" style="width:auto;padding:10px 18px" onclick="applyPreset(\'PUSH/PULL\')">Push/Pull · 2 dage</button>';
   h+='</div></div>';
-  h+='<div style="margin-bottom:10px"><div style="font-size:10px;color:#444;letter-spacing:1.5px;margin-bottom:8px">TILPAS DAGE</div><div style="font-size:11px;color:#333;margin-bottom:14px">Tryk på en dag for at skifte type → TRÆK → SKUB → BEN → FRI</div>';
-  h+='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">';
+  h+='<div style="margin-bottom:8px"><div style="font-size:10px;color:#444;letter-spacing:1.5px;margin-bottom:12px">DAGE</div>';
+  h+='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:12px">';
   [1,2,3,4,5,6,0].forEach(d=>{
-    const type=userSplit[d]||null;
-    const label=type?TYPE_LABELS[type]:"FRI";
-    const color=type?TYPE_COLORS[type]:"#222";
-    const bg=type?TYPE_BG[type]:"#111";
-    h+='<div style="text-align:center;cursor:pointer" onclick="toggleDay('+d+')">';
-    h+='<div style="font-size:9px;color:#444;letter-spacing:1px;margin-bottom:4px">'+DAY_NAMES[d]+'</div>';
-    h+='<div style="border:1px solid '+(type?color:"#1a1a1a")+';border-radius:6px;padding:8px 2px;background:'+bg+';color:'+(type?color:"#333")+';font-size:10px;letter-spacing:1px;font-family:\'Bebas Neue\'">'+label+'</div>';
+    const type=userSplit[d]||null;const prog=type?getProgram(type):null;
+    const isCustom=type&&!PROG[type];
+    const shortLabel=type?(isCustom?(prog?.label?.split(" ")[0]||"?"):TL[type]):"FRI";
+    const color=type?(isCustom?"#c8ff00":TC[type]):"#222";
+    const bg=type?(isCustom?"#1e2a00":TB[type]):"#111";
+    const isActive=activeDaySelect===d;
+    h+='<div style="text-align:center;cursor:pointer" onclick="selectDay('+d+')">';
+    h+='<div style="font-size:9px;color:'+(isActive?"#c8ff00":"#444")+';letter-spacing:1px;margin-bottom:4px">'+DN[d]+'</div>';
+    h+='<div style="border:1px solid '+(isActive?"#c8ff00":type?color:"#1a1a1a")+';border-radius:6px;padding:8px 2px;background:'+(isActive?"#1e2a00":bg)+';color:'+(isActive?"#c8ff00":type?color:"#333")+';font-size:10px;letter-spacing:1px;font-family:\'Bebas Neue\'">'+shortLabel+'</div>';
     h+='</div>';
   });
-  h+='</div></div>';
+  h+='</div>';
+  if(activeDaySelect!==null){
+    const d=activeDaySelect;
+    h+='<div style="background:#0e0e0e;border:1px solid #c8ff0030;border-radius:8px;padding:14px;margin-bottom:16px">';
+    h+='<div style="font-size:10px;color:#c8ff00;letter-spacing:1.5px;margin-bottom:12px">'+DNF[d].toUpperCase()+'</div>';
+    h+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">';
+    h+='<div class="chip'+(!userSplit[d]?" active":"")+'" onclick="setDayType('+d+',null)">FRI</div>';
+    [["TRAEK","TRÆK",TC.TRAEK],["SKUB","SKUB",TC.SKUB],["BEN","BEN",TC.BEN]].forEach(([t,l,c])=>{
+      const sel=userSplit[d]===t;
+      h+='<div class="chip'+(sel?" active":"")+'" onclick="setDayType('+d+',\''+t+'\')" style="'+(sel?'border-color:'+c+';color:'+c+';background:#111':'')+'">'+l+'</div>';
+    });
+    Object.entries(customPrograms).forEach(([id,prog])=>{
+      const sel=userSplit[d]===id;
+      h+='<div class="chip'+(sel?" active":"")+'" onclick="setDayType('+d+',\''+id+'\')" style="'+(sel?'border-color:#c8ff00;color:#c8ff00;background:#1e2a00':'')+'">'+esc(prog.name)+'</div>';
+    });
+    h+='</div>';
+    h+='<button class="btn-g" style="width:auto;padding:7px 14px;font-size:12px" onclick="editingProgram=null;showView(\'builder\')">+ Opret nyt program</button>';
+    h+='</div>';
+  }
+  h+='</div>';
+  if(Object.keys(customPrograms).length){
+    h+='<div style="margin-bottom:20px"><div style="font-size:10px;color:#444;letter-spacing:1.5px;margin-bottom:10px">MINE PROGRAMMER</div>';
+    Object.entries(customPrograms).forEach(([id,prog])=>{
+      h+='<div class="hrow" style="display:flex;align-items:center;gap:10px">';
+      h+='<div style="flex:1"><div style="font-size:13px;color:#e0dcd4">'+esc(prog.name)+'</div>';
+      h+='<div style="font-size:11px;color:#444;margin-top:2px">'+(prog.exercises||[]).length+' øvelser</div></div>';
+      h+='<button class="btn-g" style="width:auto;padding:6px 12px;font-size:11px" onclick="editProgram(\''+id+'\')">REDIGER</button>';
+      h+='<button class="rmb" onclick="deleteCustomProgram(\''+id+'\')">×</button>';
+      h+='</div>';
+    });
+    h+='</div>';
+  }
   const trainDays=Object.keys(userSplit).length;
-  if(trainDays)h+='<div style="font-size:11px;color:#555;margin:16px 0">'+trainDays+' træningsdage pr. uge</div>';
+  if(trainDays)h+='<div style="font-size:11px;color:#555;margin-bottom:16px">'+trainDays+' træningsdage pr. uge</div>';
   h+='<button class="btn-p"'+(trainDays?'':' disabled')+' onclick="saveSplit()">GEM SPLIT</button>';
   document.getElementById("vsettings").innerHTML=h;
+}
+// ── Program Builder ───────────────────────────────────────────────────────────
+function showCatalog(){builderMode=builderMode==="catalog"?null:"catalog";renderBuilder();}
+function showCustomForm(){builderMode=builderMode==="custom"?null:"custom";renderBuilder();}
+function setCatalogTab(g){catalogTab=g;renderBuilder();}
+function addCatalogEx(id,group){
+  const ex=(CATALOG[group]||[]).find(e=>e.id===id);if(!ex)return;
+  if(!editingProgram)editingProgram={name:"",exercises:[],color:"#c8ff00"};
+  if(!editingProgram.exercises.some(e=>e.id===id))
+    editingProgram.exercises.push({id:ex.id,name:ex.name,sets:ex.sets,reps:ex.reps,rest:ex.rest,muscles:ex.muscles||"",tip:ex.tip||"",machine:ex.machine||""});
+  renderBuilder();
+}
+function removeBuilderEx(i){if(editingProgram)editingProgram.exercises.splice(i,1);renderBuilder();}
+function addCustomEx(){
+  const name=document.getElementById("cex-name")?.value?.trim();
+  const sets=parseInt(document.getElementById("cex-sets")?.value)||3;
+  const reps=document.getElementById("cex-reps")?.value||"12";
+  const rest=document.getElementById("cex-rest")?.value||"60s";
+  if(!name)return;
+  if(!editingProgram)editingProgram={name:"",exercises:[],color:"#c8ff00"};
+  editingProgram.exercises.push({id:"custom_"+Date.now().toString(36),name,sets,reps,rest,isCustom:true});
+  builderMode=null;renderBuilder();
+}
+async function saveCustomProgram(){
+  const nameEl=document.getElementById("progname");
+  const name=(nameEl?.value||"").trim()||(editingProgram?.name||"");
+  if(!name){nameEl?.focus();return;}
+  if(!editingProgram)editingProgram={exercises:[],color:"#c8ff00"};
+  editingProgram.name=name;
+  const id=editingProgram.id||("prog_"+Date.now().toString(36)+Math.random().toString(36).slice(2,5));
+  const data={name:editingProgram.name,color:editingProgram.color||"#c8ff00",exercises:editingProgram.exercises||[]};
+  await setDoc(doc(db,"users",CU.uid,"programs",id),data);
+  customPrograms[id]=data;editingProgram=null;builderMode=null;showView("settings");
+}
+function renderBuilder(){
+  const prog=editingProgram||{name:"",exercises:[],color:"#c8ff00"};
+  let h='<div style="display:flex;align-items:center;gap:10px;margin-bottom:24px">';
+  h+='<button class="btn-g" style="width:auto;padding:8px 14px;font-size:12px" onclick="editingProgram=null;showView(\'settings\')">← TILBAGE</button>';
+  h+='<div style="font-family:\'Bebas Neue\';font-size:22px;letter-spacing:2px;color:#c8ff00">'+(prog.id?"REDIGER":"NYT PROGRAM")+'</div></div>';
+  h+='<div style="margin-bottom:18px"><div style="font-size:10px;color:#444;letter-spacing:1.5px;margin-bottom:8px">PROGRAMNAVN</div>';
+  h+='<input id="progname" class="field" placeholder="f.eks. Ryg & Biceps" value="'+esc(prog.name||"")+'"/></div>';
+  h+='<div style="margin-bottom:14px"><div style="font-size:10px;color:#444;letter-spacing:1.5px;margin-bottom:10px">ØVELSER ('+(prog.exercises||[]).length+')</div>';
+  if(prog.exercises&&prog.exercises.length){
+    (prog.exercises||[]).forEach((ex,i)=>{
+      h+='<div class="hrow" style="display:flex;align-items:center;gap:8px;margin-bottom:6px">';
+      h+='<div style="flex:1"><div style="font-size:13px;color:#e0dcd4">'+esc(ex.name)+'</div>';
+      h+='<div style="font-size:10px;color:#444">'+ex.sets+' sæt · '+esc(ex.reps)+' · '+esc(ex.rest)+'</div></div>';
+      h+='<button class="rmb" onclick="removeBuilderEx('+i+')">×</button></div>';
+    });
+  } else {
+    h+='<div style="color:#2a2a2a;font-size:12px;text-align:center;padding:16px 0;border:1px dashed #1e1e1e;border-radius:6px">Ingen øvelser endnu</div>';
+  }
+  h+='</div>';
+  h+='<div style="display:flex;gap:8px;margin-bottom:16px">';
+  h+='<button class="'+(builderMode==="catalog"?"btn-p":"btn-g")+'" style="flex:1" onclick="showCatalog()">+ FRA KATALOG</button>';
+  h+='<button class="'+(builderMode==="custom"?"btn-p":"btn-g")+'" style="flex:1" onclick="showCustomForm()">+ EGEN ØVELSE</button>';
+  h+='</div>';
+  if(builderMode==="catalog"){
+    const groups=Object.keys(CATALOG);
+    h+='<div style="background:#0a0a0a;border:1px solid #1a1a1a;border-radius:8px;padding:14px;margin-bottom:16px">';
+    h+='<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:12px">';
+    groups.forEach(g=>{h+='<button class="chip'+(catalogTab===g?" active":"")+'" onclick="setCatalogTab(\''+g+'\')">'+g+'</button>';});
+    h+='</div>';
+    (CATALOG[catalogTab]||[]).forEach(ex=>{
+      const added=(prog.exercises||[]).some(e=>e.id===ex.id);
+      h+='<div style="display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid #111">';
+      h+='<div style="flex:1"><div style="font-size:12px;color:#e0dcd4">'+esc(ex.name)+'</div>';
+      h+='<div style="font-size:10px;color:#444">'+ex.sets+' sæt · '+esc(ex.reps)+' · '+ex.rest+'</div></div>';
+      if(added){h+='<span style="font-size:11px;color:#c8ff00;letter-spacing:1px">TILFØJET</span>';}
+      else{h+='<button class="chip" onclick="addCatalogEx(\''+ex.id+'\',\''+catalogTab+'\')" style="padding:4px 12px;color:#c8ff00;border-color:#c8ff0040">+</button>';}
+      h+='</div>';
+    });
+    h+='</div>';
+  } else if(builderMode==="custom"){
+    h+='<div style="background:#0a0a0a;border:1px solid #1a1a1a;border-radius:8px;padding:14px;margin-bottom:16px">';
+    h+='<div style="font-size:10px;color:#444;letter-spacing:1.5px;margin-bottom:12px">EGEN ØVELSE</div>';
+    h+='<input id="cex-name" class="field" placeholder="Øvelsesnavn" style="margin-bottom:8px"/>';
+    h+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px">';
+    h+='<div><div style="font-size:10px;color:#444;margin-bottom:4px">SÆTS</div><input id="cex-sets" class="sinput" type="text" inputmode="numeric" placeholder="3" value="3"/></div>';
+    h+='<div><div style="font-size:10px;color:#444;margin-bottom:4px">REPS</div><input id="cex-reps" class="sinput" type="text" placeholder="12" value="12"/></div>';
+    h+='<div><div style="font-size:10px;color:#444;margin-bottom:4px">HVIL</div><input id="cex-rest" class="sinput" type="text" placeholder="60s" value="60s"/></div>';
+    h+='</div>';
+    h+='<button class="btn-g" style="width:auto;padding:8px 16px" onclick="addCustomEx()">TILFØJ ØVELSE</button></div>';
+  }
+  h+='<button class="btn-p" onclick="saveCustomProgram()">'+(prog.id?"GEM ÆNDRINGER":"OPRET PROGRAM")+'</button>';
+  document.getElementById("vbuilder").innerHTML=h;
 }
 
 function renderHistContent(data){

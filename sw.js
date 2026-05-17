@@ -1,6 +1,5 @@
-const CACHE = "loft-v2";
+const CACHE = "loft-v3";
 
-// Don't pre-cache on install — cache dynamically as pages are visited
 self.addEventListener("install", () => self.skipWaiting());
 
 self.addEventListener("activate", e => {
@@ -24,6 +23,13 @@ self.addEventListener("fetch", e => {
         }
         return res;
       })
-      .catch(() => caches.match(e.request))
+      .catch(async () => {
+        const cached = await caches.match(e.request);
+        if (cached) return cached;
+        return new Response("Offline \u2014 ingen forbindelse", {
+          status: 503,
+          headers: { "Content-Type": "text/plain" }
+        });
+      })
   );
 });

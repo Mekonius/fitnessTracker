@@ -18,7 +18,7 @@ input,textarea{outline:none;font-family:inherit}
 input:focus,textarea:focus{border-color:#c8ff00!important}
 ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:#1a1a1a}::-webkit-scrollbar-thumb{background:#444;border-radius:2px}
 .pill{display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;letter-spacing:1px}
-.pill-t{background:#1a3a5c;color:#5bc8ff}.pill-s{background:#3a1a1a;color:#ff8c5b}
+.pill-t{background:#1a3a5c;color:#5bc8ff}.pill-s{background:#3a1a1a;color:#ff8c5b}.pill-b{background:#0a2a0a;color:#a8ff78}
 .btn-p{background:#c8ff00;color:#0e0e0e;border:none;border-radius:6px;padding:13px;font-family:"Bebas Neue",sans-serif;font-size:18px;letter-spacing:3px;cursor:pointer;width:100%}
 .btn-p:hover{background:#aadd00}.btn-p:disabled{background:#444;color:#666;cursor:not-allowed}
 .btn-g{background:#111;color:#777;border:1px solid #2a2a2a;border-radius:6px;padding:13px;font-family:"Bebas Neue",sans-serif;font-size:15px;letter-spacing:2px;cursor:pointer;width:100%}
@@ -101,6 +101,7 @@ input:focus,textarea:focus{border-color:#c8ff00!important}
       <button class="tab"        id="nav-program" onclick="showView('program')">Program</button>
       <button class="tab"        id="nav-log"     onclick="showView('log')">Log</button>
       <button class="tab"        id="nav-history" onclick="showView('history')">Historik</button>
+      <button class="tab"        id="nav-settings" onclick="showView('settings')">Split</button>
     </div>
   </div>
   <div style="padding:20px;max-width:640px;margin:0 auto">
@@ -108,6 +109,7 @@ input:focus,textarea:focus{border-color:#c8ff00!important}
     <div id="vprogram" style="display:none"></div>
     <div id="vlog"     style="display:none"></div>
     <div id="vhistory" style="display:none"></div>
+    <div id="vsettings" style="display:none"></div>
   </div>
 </div>
 
@@ -121,7 +123,7 @@ import { getAuth, onAuthStateChanged,
          GoogleAuthProvider,
          updateProfile, signOut }                     from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
 import { getFirestore, collection, doc,
-         setDoc, getDocs, onSnapshot }                from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+         setDoc, getDoc, getDocs, onSnapshot }        from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 const app  = initializeApp({
   apiKey:"AIzaSyDyyEOWezeMnrcAmCZgtbjI0wh5GpYGkSg",
@@ -146,7 +148,10 @@ getRedirectResult(auth).then(result => {
 }).catch(e => showAuthError(ERRS[e.code] || e.message));
 
 // ── Programs ─────────────────────────────────────────────────────────────────
-const TDAYS = [0,2,4];
+const PRESETS = {
+  "PPL":       {1:"SKUB",3:"TRAEK",5:"BEN"},
+  "PUSH/PULL": {1:"SKUB",4:"TRAEK"}
+};
 const PROG = {
   TRAEK:{
     label:"TRÆK DAG", color:"#5bc8ff", bgColor:"#0a1a2a",
@@ -171,17 +176,24 @@ const PROG = {
       {id:"tricep_pushdown",name:"Tricep Pushdown", machine:"Kabelmaskine med reb — eller hydraulisk arm extension", muscles:"Triceps brachii (trehovede overarmsmuskel — bagsiden af overarmen)", tip:"Hold albuerne tæt ind til kroppen og pres ned til armen er helt strakt.", sets:3,reps:"12–15",rest:"60s"},
       {id:"russian_twist",  name:"Russian Twist",   machine:"Gulvet med eller uden vægtskive",              muscles:"Skrå mavemuskler (obliques) + dybe core muskler",                      tip:"Læn dig let bagover med hælene løftet. Roter torso — ikke kun armene.", sets:3,reps:"20 (10/side)",rest:"30s"}
     ]
+  },
+  BEN:{
+    label:"BEN DAG", color:"#a8ff78", bgColor:"#0a2a0a",
+    desc:"Fokus på quadriceps, baglår, glutes og læg",
+    ex:[
+      {id:"squat",         name:"Squat / Benpres",      machine:"Squat rack eller benpres maskine",            muscles:"Quadriceps + glutes + hamstrings",                                          tip:"Hold ryggen ret og brystet hævet. Knæene følger tæernes retning. Gå ned til mindst 90°.", sets:4,reps:"10–12",rest:"90s"},
+      {id:"leg_press",     name:"Leg Press",             machine:"Benpres maskine",                            muscles:"Quadriceps + glutes",                                                       tip:"Placer fødderne skulderbredde. Lad ikke knæene kollapse indad. Fuld bevægelsesbane.", sets:3,reps:"12–15",rest:"60s"},
+      {id:"romanian_dl",   name:"Romanian Deadlift",     machine:"Håndvægte eller stang",                      muscles:"Hamstrings (baglår) + glutes + nedre ryg",                                  tip:"Hold stangen tæt på kroppen. Træk hoften tilbage — ikke ned. Mærk strækket i baglåret.", sets:3,reps:"12",rest:"60s"},
+      {id:"leg_curl",      name:"Leg Curl",              machine:"Leg curl maskine (liggende eller siddende)", muscles:"Hamstrings (baglår)",                                                       tip:"Fuld bevægelsesbane. Hold hofterne nede mod bænken.", sets:3,reps:"12–15",rest:"60s"},
+      {id:"leg_extension", name:"Leg Extension",         machine:"Leg extension maskine",                      muscles:"Quadriceps (forlår)",                                                       tip:"Stræk fuldt ud i toppen. Kontrolleret ned. Brug ikke for tung vægt.", sets:3,reps:"15",rest:"45s"},
+      {id:"calf_raise",    name:"Calf Raises",           machine:"Calf raise maskine eller trappetrin",        muscles:"Gastrocnemius + soleus (læg)",                                              tip:"Fuld bevægelsesbane — helt op og helt ned. Hold 1 sekund i toppen.", sets:4,reps:"20",rest:"30s"}
+    ]
   }
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function getType(ds){
-  const a=new Date("2026-05-17"),t=new Date(ds+"T12:00:00");
-  a.setHours(0,0,0,0);t.setHours(0,0,0,0);
-  if(!TDAYS.includes(t.getDay()))return null;
-  let c=0;const cur=new Date(a);
-  while(cur<=t){if(TDAYS.includes(cur.getDay()))c++;cur.setDate(cur.getDate()+1);}
-  return c%2===1?"TRAEK":"SKUB";
+  return userSplit[new Date(ds+"T12:00:00").getDay()]||null;
 }
 const tds=d=>d.toISOString().split("T")[0];
 const fmtDate=ds=>new Date(ds+"T12:00:00").toLocaleDateString("da-DK",{weekday:"long",day:"numeric",month:"long"});
@@ -192,13 +204,13 @@ const iSet=()=>({reps:"",weight:""});
 const buildDef=type=>PROG[type].ex.map(e=>({id:e.id,name:e.name,sets:Array.from({length:e.sets},iSet)}));
 function upcoming(n){
   const days=[],cur=new Date();let i=0;
-  while(days.length<n&&i<90){const d=new Date(cur);d.setDate(d.getDate()+i);const ds=tds(d);if(TDAYS.includes(d.getDay()))days.push({date:ds,type:getType(ds)});i++;}
+  while(days.length<n&&i<90){const d=new Date(cur);d.setDate(d.getDate()+i);const ds=tds(d);const type=getType(ds);if(type)days.push({date:ds,type});i++;}
   return days;
 }
-const pill=t=>'<span class="pill '+(t==="TRAEK"?"pill-t":"pill-s")+'">'+(t==="TRAEK"?"TRÆK":"SKUB")+'</span>';
+const pill=t=>'<span class="pill '+(t==="TRAEK"?"pill-t":t==="SKUB"?"pill-s":"pill-b")+'">'+(t==="TRAEK"?"TRÆK":t==="SKUB"?"SKUB":"BEN")+'</span>';
 
 // ── State ─────────────────────────────────────────────────────────────────────
-let CU=null,sessions={},allUsers={},activeDate=tds(new Date());
+let CU=null,sessions={},allUsers={},activeDate=tds(new Date()),userSplit={};
 let curView="today",logEx=[],logNote="",openEx=null,histUid=null,unsubSess=null;
 
 // ── Window-exposed handlers ───────────────────────────────────────────────────
@@ -216,6 +228,9 @@ window.doGoogle = doGoogle;
 window.doSignOut= ()=>signOut(auth);
 window.setMode  = setMode;
 window.switchHist=uid=>{histUid=uid;renderHistory();};
+window.applyPreset=applyPreset;
+window.toggleDay=toggleDay;
+window.saveSplit=saveSplit;
 
 // ── Google Sign-In ────────────────────────────────────────────────────────────
 async function doGoogle(){
@@ -279,7 +294,7 @@ async function doAuth(){
 }
 
 // ── Auth state ────────────────────────────────────────────────────────────────
-onAuthStateChanged(auth, user=>{
+onAuthStateChanged(auth, async user=>{
   document.getElementById("sload").style.display="none";
   if(user){
     CU=user;histUid=user.uid;
@@ -287,7 +302,7 @@ onAuthStateChanged(auth, user=>{
     document.getElementById("sapp").style.display="block";
     document.getElementById("hname").textContent=user.displayName||user.email.split("@")[0];
     if(user.photoURL){const av=document.getElementById("havatar");av.src=user.photoURL;av.style.display="block";}
-    updateHdr();startListen();loadUsers();showView("today");
+    updateHdr();startListen();loadUsers();await loadSettings();
   } else {
     CU=null;
     if(unsubSess){unsubSess();unsubSess=null;}
@@ -306,15 +321,15 @@ function startListen(){
 }
 async function loadUsers(){const snap=await getDocs(collection(db,"users"));allUsers={};snap.forEach(d=>{allUsers[d.id]=d.data();});}
 function updateHdr(){
-  const today=tds(new Date()),type=getType(today),isTrain=TDAYS.includes(new Date(today+"T12:00:00").getDay());
+  const today=tds(new Date()),type=getType(today);
   document.getElementById("hdate").innerHTML=cap(fmtDate(today))+" — "
-    +(isTrain?'<span style="color:#c8ff00">Træningsdag · '+(type==="TRAEK"?"TRÆK":"SKUB")+"</span>":'<span style="color:#333">Hviledag</span>');
+    +(type?'<span style="color:#c8ff00">Træningsdag · '+(type==="TRAEK"?"TRÆK":type==="SKUB"?"SKUB":"BEN")+"</span>":'<span style="color:#333">Hviledag</span>');
 }
 
 // ── View ──────────────────────────────────────────────────────────────────────
 function showView(v){
   curView=v;
-  ["today","program","log","history"].forEach(n=>{
+  ["today","program","log","history","settings"].forEach(n=>{
     document.getElementById("v"+n).style.display=n===v?"block":"none";
     const t=document.getElementById("nav-"+n);if(t)t.className="tab"+(n===v?" active":"");
   });
@@ -322,6 +337,7 @@ function showView(v){
   else if(v==="program")renderProgram();
   else if(v==="log"){initLog();renderLog();}
   else if(v==="history")renderHistory();
+  else if(v==="settings")renderSettings();
 }
 
 function dateChips(){
@@ -335,7 +351,7 @@ function dateChips(){
 }
 
 function renderToday(){
-  const today=tds(new Date()),isTrain=TDAYS.includes(new Date(today+"T12:00:00").getDay());
+  const today=tds(new Date()),isTrain=!!getType(today);
   let h='<div style="margin-bottom:24px"><div style="font-size:10px;color:#444;letter-spacing:2px;margin-bottom:10px">KOMMENDE TRÆNING</div>';
   upcoming(8).forEach(u=>{
     const done=!!sessions[u.date],isT=u.date===today;
@@ -344,9 +360,12 @@ function renderToday(){
       +'<span style="flex:1;font-size:12px;color:'+(isT?"#e0dcd4":"#666")+'">'+(isT?"I dag":cap(fmtDate(u.date)))+'</span>'
       +pill(u.type)+(done?'<span style="font-size:10px;color:#c8ff00">✓</span>':"")+'</div>';
   });
-  const tot=Object.keys(sessions).length,tr=Object.values(sessions).filter(s=>s.type==="TRAEK").length;
-  h+='</div><div style="margin-bottom:24px"><div style="font-size:10px;color:#444;letter-spacing:2px;margin-bottom:10px">MINE STATS</div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">';
-  [[tot,"Sessions"],[tr,"Træk"],[tot-tr,"Skub"]].forEach(([v,l])=>{
+  const vals=Object.values(sessions),tot=vals.length;
+  const byType={TRAEK:0,SKUB:0,BEN:0};vals.forEach(s=>{if(s.type)byType[s.type]=(byType[s.type]||0)+1;});
+  const splitTypes=[...new Set(Object.values(userSplit))];
+  const statRows=[[tot,"Total"],...splitTypes.map(t=>[byType[t],t==="TRAEK"?"Træk":t==="SKUB"?"Skub":"Ben"])].slice(0,3);
+  h+='</div><div style="margin-bottom:24px"><div style="font-size:10px;color:#444;letter-spacing:2px;margin-bottom:10px">MINE STATS</div><div style="display:grid;grid-template-columns:'+Array(statRows.length).fill("1fr").join(" ")+';gap:8px">';
+  statRows.forEach(([v,l])=>{
     h+='<div class="sbox"><div style="font-family:\'Bebas Neue\';font-size:32px;color:#c8ff00;line-height:1">'+v+'</div><div style="font-size:10px;color:#444;letter-spacing:1.5px;margin-top:3px">'+l.toUpperCase()+'</div></div>';
   });
   h+='</div></div>';
@@ -418,6 +437,60 @@ async function loadHist(){
   if(histUid!==CU.uid){const snap=await getDocs(collection(db,"users",histUid,"sessions"));data={};snap.forEach(d=>{data[d.id]=d.data();});}
   renderHistContent(data);
 }
+// ── Settings / Split ─────────────────────────────────────────────────────────
+async function loadSettings(){
+  const snap=await getDoc(doc(db,"users",CU.uid,"settings","split"));
+  if(snap.exists()&&snap.data().days&&Object.keys(snap.data().days).length){
+    userSplit=snap.data().days;
+    showView("today");
+  } else {
+    userSplit={};
+    showView("settings");
+  }
+}
+async function saveSplit(){
+  await setDoc(doc(db,"users",CU.uid,"settings","split"),{days:userSplit});
+  updateHdr();showView("today");
+}
+function applyPreset(name){userSplit={...PRESETS[name]};renderSettings();}
+function toggleDay(d){
+  const order=[null,"TRAEK","SKUB","BEN"];
+  const cur=userSplit[d]||null;
+  const next=order[(order.indexOf(cur)+1)%order.length];
+  if(next===null)delete userSplit[d];else userSplit[d]=next;
+  renderSettings();
+}
+function renderSettings(){
+  const DAY_NAMES=["SØN","MAN","TIR","ONS","TOR","FRE","LØR"];
+  const TYPE_LABELS={TRAEK:"TRÆK",SKUB:"SKUB",BEN:"BEN"};
+  const TYPE_COLORS={TRAEK:"#5bc8ff",SKUB:"#ff8c5b",BEN:"#a8ff78"};
+  const TYPE_BG={TRAEK:"#0a1a2a",SKUB:"#2a0a0a",BEN:"#0a2a0a"};
+  const hasSplit=Object.keys(userSplit).length>0;
+  let h='<div style="font-size:10px;color:#444;letter-spacing:2px;margin-bottom:20px">DIT TRÆNINGSSPLIT</div>';
+  if(!hasSplit)h+='<div style="font-size:13px;color:#555;margin-bottom:20px;line-height:1.8">Vælg et preset for at komme hurtigt i gang, eller byg dit eget split nedenfor.</div>';
+  h+='<div style="margin-bottom:24px"><div style="font-size:10px;color:#444;letter-spacing:1.5px;margin-bottom:10px">HURTIG OPSÆTNING</div><div style="display:flex;gap:8px">';
+  h+='<button class="btn-g" style="width:auto;padding:10px 18px" onclick="applyPreset(\'PPL\')">PPL · 3 dage</button>';
+  h+='<button class="btn-g" style="width:auto;padding:10px 18px" onclick="applyPreset(\'PUSH/PULL\')">Push/Pull · 2 dage</button>';
+  h+='</div></div>';
+  h+='<div style="margin-bottom:10px"><div style="font-size:10px;color:#444;letter-spacing:1.5px;margin-bottom:8px">TILPAS DAGE</div><div style="font-size:11px;color:#333;margin-bottom:14px">Tryk på en dag for at skifte type → TRÆK → SKUB → BEN → FRI</div>';
+  h+='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">';
+  [1,2,3,4,5,6,0].forEach(d=>{
+    const type=userSplit[d]||null;
+    const label=type?TYPE_LABELS[type]:"FRI";
+    const color=type?TYPE_COLORS[type]:"#222";
+    const bg=type?TYPE_BG[type]:"#111";
+    h+='<div style="text-align:center;cursor:pointer" onclick="toggleDay('+d+')">';
+    h+='<div style="font-size:9px;color:#444;letter-spacing:1px;margin-bottom:4px">'+DAY_NAMES[d]+'</div>';
+    h+='<div style="border:1px solid '+(type?color:"#1a1a1a")+';border-radius:6px;padding:8px 2px;background:'+bg+';color:'+(type?color:"#333")+';font-size:10px;letter-spacing:1px;font-family:\'Bebas Neue\'">'+label+'</div>';
+    h+='</div>';
+  });
+  h+='</div></div>';
+  const trainDays=Object.keys(userSplit).length;
+  if(trainDays)h+='<div style="font-size:11px;color:#555;margin:16px 0">'+trainDays+' træningsdage pr. uge</div>';
+  h+='<button class="btn-p"'+(trainDays?'':' disabled')+' onclick="saveSplit()">GEM SPLIT</button>';
+  document.getElementById("vsettings").innerHTML=h;
+}
+
 function renderHistContent(data){
   const el=document.getElementById("hcontent");if(!el)return;
   const dates=Object.keys(data).sort().reverse();

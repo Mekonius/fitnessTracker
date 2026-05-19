@@ -851,15 +851,19 @@ async function loadGifForExercise(exId,name){
     const res=await fetch("https://exercisedb.p.rapidapi.com/exercises/name/"+encodeURIComponent(term)+"?limit=1",{
       headers:{"X-RapidAPI-Key":rapidApiKey,"X-RapidAPI-Host":"exercisedb.p.rapidapi.com"}
     });
+    if(!res.ok){
+      const d=await res.json().catch(()=>({}));
+      el.innerHTML='<div style="font-size:10px;color:#555;padding:4px 0">'+(d.message||"Fejl "+res.status)+'</div>';
+      return;
+    }
     const data=await res.json();
     if(data?.[0]?.gifUrl){
       const url=data[0].gifUrl;
-      // Save to Firestore so all users benefit
       setDoc(doc(db,"exercises",exId),{gifUrl:url,name}).catch(()=>{});
       lc[exId]=url;localStorage.setItem("loft_gifs",JSON.stringify(lc));
       showGif(exId,url,name);
-    } else {el.innerHTML="";}
-  }catch(e){el.innerHTML="";}
+    } else {el.innerHTML='';}
+  }catch(e){el.innerHTML='<div style="font-size:10px;color:#555;padding:4px 0">'+e.message+'</div>';}
 }
 
 // ── Settings / Split ─────────────────────────────────────────────────────────

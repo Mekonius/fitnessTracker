@@ -723,19 +723,31 @@ function saveApiKey(){
   localStorage.removeItem("loft_gifs"); // clear cache when key changes
   renderSettings();
 }
+function showGif(exId,url,name){
+  const el=document.getElementById("gif-"+exId);
+  if(el)el.innerHTML='<img src="'+url+'" alt="'+esc(name)+'" style="width:100%;max-height:220px;object-fit:cover;border-radius:6px;margin-bottom:12px;display:block"/>';
+}
 async function loadGifForExercise(exId,name){
   const el=document.getElementById("gif-"+exId);
   if(!el)return;
-  const cache=JSON.parse(localStorage.getItem("loft_gifs")||"{}");
-  if(cache[exId]){
-    el.innerHTML='<img src="'+cache[exId]+'" alt="'+esc(name)+'" style="width:100%;max-height:220px;object-fit:cover;border-radius:6px;margin-bottom:12px;display:block"/>';
-    return;
-  }
-  if(!rapidApiKey){
-    el.innerHTML='<div style="font-size:10px;color:#2a2a2a;text-align:center;padding:6px 0">Tilføj RapidAPI-nøgle i Split-indstillinger for at se animationer</div>';
-    return;
-  }
+  // 1. localStorage cache
+  const lc=JSON.parse(localStorage.getItem("loft_gifs")||"{}");
+  if(lc[exId]){showGif(exId,lc[exId],name);return;}
   el.innerHTML='<div style="font-size:10px;color:#333;text-align:center;padding:12px 0">Henter...</div>';
+  // 2. Firestore shared cache
+  try{
+    const snap=await getDoc(doc(db,"exercises",exId));
+    if(snap.exists()&&snap.data().gifUrl){
+      const url=snap.data().gifUrl;
+      lc[exId]=url;localStorage.setItem("loft_gifs",JSON.stringify(lc));
+      showGif(exId,url,name);return;
+    }
+  }catch(e){}
+  // 3. Fetch from ExerciseDB (only if API key set)
+  if(!rapidApiKey){
+    el.innerHTML='<div style="font-size:10px;color:#2a2a2a;text-align:center;padding:6px 0">Ingen animation tilgængelig endnu</div>';
+    return;
+  }
   try{
     const term=name.toLowerCase().replace(/\s*\/.*$/,"").replace(/[^a-z0-9 ]/g,"").trim();
     const res=await fetch("https://exercisedb.p.rapidapi.com/exercises/name/"+encodeURIComponent(term)+"?limit=1",{
@@ -744,13 +756,11 @@ async function loadGifForExercise(exId,name){
     const data=await res.json();
     if(data?.[0]?.gifUrl){
       const url=data[0].gifUrl;
-      const nc=JSON.parse(localStorage.getItem("loft_gifs")||"{}");
-      nc[exId]=url;localStorage.setItem("loft_gifs",JSON.stringify(nc));
-      if(document.getElementById("gif-"+exId))
-        document.getElementById("gif-"+exId).innerHTML='<img src="'+url+'" alt="'+esc(name)+'" style="width:100%;max-height:220px;object-fit:cover;border-radius:6px;margin-bottom:12px;display:block"/>';
-    } else {
-      el.innerHTML="";
-    }
+      // Save to Firestore so all users benefit
+      setDoc(doc(db,"exercises",exId),{gifUrl:url,name}).catch(()=>{});
+      lc[exId]=url;localStorage.setItem("loft_gifs",JSON.stringify(lc));
+      showGif(exId,url,name);
+    } else {el.innerHTML="";}
   }catch(e){el.innerHTML="";}
 }
 

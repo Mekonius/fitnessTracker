@@ -366,6 +366,7 @@ const pill=t=>'<span class="pill '+(t==="TRAEK"?"pill-t":t==="SKUB"?"pill-s":"pi
 let CU=null,sessions={},allUsers={},activeDate=tds(new Date()),userSplit={},customPrograms={};
 let curView="today",logEx=[],logNote="",openEx=null,histUid=null,unsubSess=null;
 let activeDaySelect=null,editingProgram=null,builderMode=null,catalogTab="RYG",logRating=null;
+let rapidApiKey=localStorage.getItem("loft_api_key")||"";
 
 // ── Window-exposed handlers ───────────────────────────────────────────────────
 window.onReps   = (xi,si,el)=>{logEx[xi].sets[si].reps=el.value.replace(/[^0-9]/g,"");el.value=logEx[xi].sets[si].reps;scheduleAutoSave();};
@@ -790,6 +791,12 @@ async function loadHist(){
   renderHistContent(data);
 }
 // ── Exercise images ───────────────────────────────────────────────────────────
+function saveApiKey(){
+  const key=(document.getElementById("apikey-input")?.value||"").trim();
+  rapidApiKey=key;localStorage.setItem("loft_api_key",key);
+  localStorage.removeItem("loft_gifs");renderSettings();
+}
+window.saveApiKey=saveApiKey;
 async function debugWger(){
   const name=(document.getElementById("dbg-input")?.value||"").trim();
   const out=document.getElementById("dbg-result");
@@ -797,27 +804,25 @@ async function debugWger(){
   if(!name){out.innerHTML='<span style="color:#ff6b6b">Indtast et navn.</span>';return;}
   out.innerHTML='<span style="color:#555">Henter...</span>';
   const term=name.toLowerCase().replace(/\s*\/.*$/,"").replace(/[^a-z0-9 ]/g,"").trim();
-  const url="https://wger.de/api/v2/exerciseinfo/?format=json&language=2&limit=5&name__icontains="+encodeURIComponent(term);
-  out.innerHTML='<span style="color:#333;word-break:break-all">URL: '+esc(url)+'</span>';
+  if(!rapidApiKey){out.innerHTML='<span style="color:#ff6b6b">Ingen API nøgle gemt.</span>';return;}
+  const url="https://exercisedb.p.rapidapi.com/exercises/name/"+encodeURIComponent(term)+"?limit=1";
+  out.innerHTML='<span style="color:#333;word-break:break-all">Søger: '+esc(term)+'</span>';
   try{
-    const r=await xhrGet(url,{});
+    const r=await xhrGet(url,{"X-RapidAPI-Key":rapidApiKey,"X-RapidAPI-Host":"exercisedb.p.rapidapi.com"});
     out.innerHTML+='<br><span style="color:#555">Status: '+r.status+'</span>';
     if(r.ok){
-      const d=JSON.parse(r.text);
-      const results=d?.results||[];
-      out.innerHTML+='<br><span style="color:#555">Resultater: '+results.length+'</span>';
-      if(results.length){
-        out.innerHTML+='<br><span style="color:#333">Første: '+esc(results[0]?.translations?.find(t=>t.language===2)?.name||results[0]?.id)+'</span>';
-        const img=results.find(e=>e.images?.length)?.images?.[0];
-        if(img?.image){
-          out.innerHTML+='<br><span style="color:#c8ff00">Billede fundet!</span>';
-          out.innerHTML+='<br><img src="'+esc(img.image)+'" style="max-width:100%;border-radius:6px;margin-top:8px"/>';
-        } else {
-          out.innerHTML+='<br><span style="color:#ff6b6b">Ingen billeder på disse øvelser.</span>';
-        }
+      const data=JSON.parse(r.text);
+      const hit=data?.[0];
+      if(hit){
+        out.innerHTML+='<br><span style="color:#555">Match: '+esc(hit.name)+'</span>';
+        out.innerHTML+='<br><span style="color:#333">Felter: '+esc(Object.keys(hit).join(", "))+'</span>';
+        out.innerHTML+='<br><span style="color:#333">gifUrl: '+esc(hit.gifUrl||"(mangler)")+'</span>';
+        out.innerHTML+='<br><span style="color:#333">id: '+esc(hit.id)+'</span>';
+        const gifUrl=hit.gifUrl||"https://v2.exercisedb.io/image/"+hit.id+".gif";
+        out.innerHTML+='<br><span style="color:#555">Prøver: '+esc(gifUrl)+'</span>';
+        out.innerHTML+='<br><img src="'+esc(gifUrl)+'" style="max-width:100%;border-radius:6px;margin-top:8px" onerror="document.getElementById(\'dbg-result\').innerHTML+=\'<br><span style=\\"color:#ff6b6b\\">Billede fejlede (422/403)</span>\'"/>';
       } else {
-        out.innerHTML+='<br><span style="color:#ff6b6b">Ingen match.</span>';
-        out.innerHTML+='<br><span style="color:#333">Råsvar: '+esc(r.text.slice(0,200))+'</span>';
+        out.innerHTML+='<br><span style="color:#ff6b6b">Ingen match for: '+esc(term)+'</span>';
       }
     } else {
       out.innerHTML+='<br><span style="color:#ff6b6b">HTTP '+r.status+': '+esc(r.text.slice(0,200))+'</span>';
@@ -857,23 +862,26 @@ async function loadGifForExercise(exId,name){
       showGif(exId,url,name);return;
     }
   }catch(e){}
-  // 2. wger.de — free, no API key
+  // 2. ExerciseDB via RapidAPI
+  if(!rapidApiKey){el.innerHTML='';return;}
   try{
     const term=name.toLowerCase().replace(/\s*\/.*$/,"").replace(/[^a-z0-9 ]/g,"").trim();
-    const r=await xhrGet("https://wger.de/api/v2/exerciseinfo/?format=json&language=2&limit=5&name__icontains="+encodeURIComponent(term),{});
+    const r=await xhrGet("https://exercisedb.p.rapidapi.com/exercises/name/"+encodeURIComponent(term)+"?limit=1",
+      {"X-RapidAPI-Key":rapidApiKey,"X-RapidAPI-Host":"exercisedb.p.rapidapi.com"});
     if(r.ok){
-      const d=JSON.parse(r.text);
-      const results=d?.results||[];
-      for(const ex of results){
-        const img=ex?.images?.find(i=>i.is_main)||ex?.images?.[0];
-        if(img?.image){
-          setDoc(doc(db,"exercises",exId),{gifUrl:img.image,name}).catch(()=>{});
-          lc[exId]=img.image;localStorage.setItem("loft_gifs",JSON.stringify(lc));
-          showGif(exId,img.image,name);return;
-        }
+      const data=JSON.parse(r.text);
+      console.log("ExerciseDB full hit:",JSON.stringify(data[0]));
+      const hit=data?.[0];
+      if(hit){
+        const gifUrl=hit.gifUrl||"https://v2.exercisedb.io/image/"+hit.id+".gif";
+        setDoc(doc(db,"exercises",exId),{gifUrl,name}).catch(()=>{});
+        lc[exId]=gifUrl;localStorage.setItem("loft_gifs",JSON.stringify(lc));
+        showGif(exId,gifUrl,name);return;
       }
+    } else {
+      console.warn("ExerciseDB error:",r.status,r.text.slice(0,200));
     }
-  }catch(e){}
+  }catch(e){console.error("ExerciseDB fetch error:",e.message);}
   el.innerHTML='';
 }
 
@@ -971,6 +979,12 @@ function renderSettings(){
   // API key section — only visible to app owner
   if(CU&&CU.email==="kenneth.l.thomsen@gmail.com"){
     h+='<div style="margin-top:32px;padding-top:20px;border-top:1px solid #1a1a1a">'
+      +'<div style="font-size:10px;color:#444;letter-spacing:1.5px;margin-bottom:8px">EXERCISEDB API (ADMIN)</div>'
+      +'<input id="apikey-input" class="field" type="password" placeholder="RapidAPI nøgle..." value="'+esc(rapidApiKey)+'"/>'
+      +'<button class="btn-g" style="width:auto;padding:9px 18px;margin-top:8px;font-size:12px" onclick="saveApiKey()">'+(rapidApiKey?"OPDATER":"GEM")+'</button>'
+      +(rapidApiKey?'<div style="font-size:10px;color:#2a5a2a;margin-top:6px">Nøgle aktiv.</div>':"")
+      +'</div>'
+      +'<div style="margin-top:24px;padding-top:20px;border-top:1px solid #1a1a1a">'
       +'<div style="font-size:10px;color:#444;letter-spacing:1.5px;margin-bottom:10px">BILLEDE DEBUG (ADMIN)</div>'
       +'<input id="dbg-input" class="field" placeholder="Øvelsesnavn (f.eks. seated row)..." style="margin-bottom:8px"/>'
       +'<button class="btn-g" style="width:auto;padding:9px 18px;font-size:12px" onclick="debugWger()">TEST BILLEDE</button>'

@@ -403,8 +403,10 @@ window.saveCustomProgram=saveCustomProgram;
 // ── Google Sign-In ────────────────────────────────────────────────────────────
 async function doGoogle(){
   try {
-    await signInWithRedirect(auth, googleProvider);
+    const result = await signInWithPopup(auth, googleProvider);
+    if(result) await handleNewSocialUser(result.user);
   } catch(e) {
+    if(e.code==="auth/popup-blocked"||e.code==="auth/popup-closed-by-user")return;
     showAuthError(ERRS[e.code] || "Google login fejlede. Prøv igen.");
   }
 }

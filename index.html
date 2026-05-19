@@ -808,7 +808,13 @@ async function testApiKey(){
     const res=await fetch("https://exercisedb.p.rapidapi.com/exercises/name/bench%20press?limit=1",{
       headers:{"X-RapidAPI-Key":key,"X-RapidAPI-Host":"exercisedb.p.rapidapi.com"}
     });
-    if(res.ok){el.textContent="Nøgle virker!";el.style.color="#c8ff00";}
+    if(res.ok){
+      rapidApiKey=key;
+      localStorage.setItem("loft_api_key",key);
+      localStorage.removeItem("loft_gifs");
+      el.textContent="Nøgle virker! Gemt.";el.style.color="#c8ff00";
+      const inp=document.getElementById("apikey-input");if(inp)inp.value=key;
+    }
     else{
       const d=await res.json().catch(()=>({}));
       el.textContent="Fejl ("+res.status+"): "+(d.message||"ukendt");el.style.color="#ff6b6b";

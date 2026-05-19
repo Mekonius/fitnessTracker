@@ -323,12 +323,13 @@ let curView="today",logEx=[],logNote="",openEx=null,histUid=null,unsubSess=null;
 let activeDaySelect=null,editingProgram=null,builderMode=null,catalogTab="RYG";
 
 // ── Window-exposed handlers ───────────────────────────────────────────────────
-window.onReps   = (xi,si,el)=>{logEx[xi].sets[si].reps=el.value.replace(/[^0-9]/g,"");el.value=logEx[xi].sets[si].reps;};
-window.onKg     = (xi,si,el)=>{logEx[xi].sets[si].weight=el.value.replace(/[^0-9]/g,"");el.value=logEx[xi].sets[si].weight;};
+window.onReps   = (xi,si,el)=>{logEx[xi].sets[si].reps=el.value.replace(/[^0-9]/g,"");el.value=logEx[xi].sets[si].reps;scheduleAutoSave();};
+window.onKg     = (xi,si,el)=>{logEx[xi].sets[si].weight=el.value.replace(/[^0-9]/g,"");el.value=logEx[xi].sets[si].weight;scheduleAutoSave();};
 window.onNote   = el=>{logNote=el.value;};
 window.addSet   = xi=>{logEx[xi].sets.push(iSet());renderLog();};
 window.rmSet    = (xi,si)=>{logEx[xi].sets.splice(si,1);renderLog();};
 window.saveLog  = saveLog;
+window.moveEx   = moveEx;
 window.toggleEx = id=>{openEx=openEx===id?null:id;renderProgram();};
 window.setDate  = ds=>{activeDate=ds;if(curView==="program")renderProgram();else if(curView==="log"){initLog();renderLog();}};
 window.showView = showView;
@@ -528,9 +529,25 @@ function renderProgram(){
 function initLog(){
   const type=getType(activeDate);
   if(!type){logEx=[];logNote="";return;}
-  const ex=sessions[activeDate];
-  if(ex){logEx=JSON.parse(JSON.stringify(ex.exercises||[]));logNote=ex.note||"";}
-  else{logEx=buildDef(type);logNote="";}
+  const existing=sessions[activeDate];
+  if(existing){
+    logEx=JSON.parse(JSON.stringify(existing.exercises||[]));logNote=existing.note||"";return;
+  }
+  // Pre-fill from last session of same type
+  const prev=Object.entries(sessions)
+    .filter(([d,s])=>s.type===type&&d<activeDate)
+    .sort(([a],[b])=>b.localeCompare(a))[0]?.[1];
+  if(prev){
+    const prevMap={};(prev.exercises||[]).forEach(e=>{prevMap[e.id]=e;});
+    logEx=buildDef(type).map(ex=>{
+      const p=prevMap[ex.id];
+      if(!p)return ex;
+      return{...ex,sets:p.sets.map(s=>({reps:s.reps||"",weight:s.weight||""}))};
+    });
+  } else {
+    logEx=buildDef(type);
+  }
+  logNote="";
 }
 
 function renderLog(){
@@ -539,26 +556,65 @@ function renderLog(){
   if(!type){document.getElementById("vlog").innerHTML=h+'<div style="color:#333;font-size:13px">Ikke en træningsdag.</div>';return;}
   const p=getProgram(type);
   if(!p){document.getElementById("vlog").innerHTML=h+'<div style="color:#333;font-size:13px">Program ikke fundet.</div>';return;}
-  h+='<div style="display:flex;align-items:baseline;gap:10px;margin-bottom:18px"><span style="font-family:\'Bebas Neue\';font-size:24px;letter-spacing:2px;color:'+p.color+'">'+p.label+'</span><span style="font-size:11px;color:#444">'+cap(fmtDate(activeDate))+'</span></div>';
+  h+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:18px">'
+    +'<span style="font-family:\'Bebas Neue\';font-size:24px;letter-spacing:2px;color:'+p.color+'">'+p.label+'</span>'
+    +'<span style="font-size:11px;color:#444;flex:1">'+cap(fmtDate(activeDate))+'</span>'
+    +'<span id="autosavelbl" style="font-size:10px;color:#2a4a00;letter-spacing:1px"></span>'
+    +'</div>';
   logEx.forEach((ex,xi)=>{
     const def=p.ex.find(e=>e.id===ex.id)||{};
-    h+='<div class="excard"><div style="margin-bottom:10px"><div style="font-size:13px;color:#e0dcd4">'+esc(ex.name)+'</div>'+(def.muscles?'<div style="font-size:10px;color:'+p.color+';opacity:.7;margin-top:2px">'+esc(def.muscles)+'</div>':"")+(def.reps?'<div style="font-size:10px;color:#333;margin-top:2px">Mål: '+def.sets+' sæt · '+esc(def.reps)+' reps · '+def.rest+' hvil</div>':"")+'</div><div style="display:grid;grid-template-columns:28px 1fr 1fr 28px;gap:5px;margin-bottom:6px"><span></span><span style="font-size:10px;color:#444;text-align:center;letter-spacing:1px">REPS</span><span style="font-size:10px;color:#444;text-align:center;letter-spacing:1px">'+(def.isTime?"SEK":"KG")+'</span><span></span></div>';
+    const isFirst=xi===0,isLast=xi===logEx.length-1;
+    h+='<div class="excard">'
+      +'<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:10px">'
+      +'<div style="flex:1"><div style="font-size:13px;color:#e0dcd4">'+esc(ex.name)+'</div>'
+      +(def.muscles?'<div style="font-size:10px;color:'+p.color+';opacity:.7;margin-top:2px">'+esc(def.muscles)+'</div>':"")
+      +(def.reps?'<div style="font-size:10px;color:#333;margin-top:2px">Mål: '+def.sets+' sæt · '+esc(def.reps)+' · '+def.rest+'</div>':"")
+      +'</div>'
+      +'<div style="display:flex;flex-direction:column;gap:2px">'
+      +'<button class="rmb" style="font-size:14px;color:'+(isFirst?"#1a1a1a":"#444")+'" onclick="moveEx('+xi+',-1)" '+(isFirst?"disabled":"")+'>↑</button>'
+      +'<button class="rmb" style="font-size:14px;color:'+(isLast?"#1a1a1a":"#444")+'" onclick="moveEx('+xi+',1)" '+(isLast?"disabled":"")+'>↓</button>'
+      +'</div></div>'
+      +'<div style="display:grid;grid-template-columns:28px 1fr 1fr 28px;gap:5px;margin-bottom:6px">'
+      +'<span></span><span style="font-size:10px;color:#444;text-align:center;letter-spacing:1px">REPS</span>'
+      +'<span style="font-size:10px;color:#444;text-align:center;letter-spacing:1px">'+(def.isTime?"SEK":"KG")+'</span><span></span></div>';
     ex.sets.forEach((set,si)=>{
-      h+='<div style="display:grid;grid-template-columns:28px 1fr 1fr 28px;gap:5px;margin-bottom:5px;align-items:center"><span style="font-size:11px;color:#333;text-align:center">S'+(si+1)+'</span><input class="sinput" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="—" value="'+esc(set.reps)+'" oninput="onReps('+xi+','+si+',this)"><input class="sinput" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="—" value="'+esc(set.weight)+'" oninput="onKg('+xi+','+si+',this)"><button class="rmb" onclick="rmSet('+xi+','+si+')">×</button></div>';
+      h+='<div style="display:grid;grid-template-columns:28px 1fr 1fr 28px;gap:5px;margin-bottom:5px;align-items:center">'
+        +'<span style="font-size:11px;color:#333;text-align:center">S'+(si+1)+'</span>'
+        +'<input class="sinput" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="—" value="'+esc(set.reps)+'" oninput="onReps('+xi+','+si+',this)">'
+        +'<input class="sinput" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="—" value="'+esc(set.weight)+'" oninput="onKg('+xi+','+si+',this)">'
+        +'<button class="rmb" onclick="rmSet('+xi+','+si+')">×</button></div>';
     });
     h+='<button class="asb" onclick="addSet('+xi+')">+ SÆT</button></div>';
   });
-  h+='<textarea class="field" placeholder="Note til træningen (valgfrit)..." rows="2" style="resize:vertical;margin-bottom:10px;color:#777" oninput="onNote(this)">'+esc(logNote)+'</textarea><button class="btn-p" id="savebtn" onclick="saveLog()">GEM TRÆNING</button>';
+  h+='<textarea class="field" placeholder="Note til træningen (valgfrit)..." rows="2" style="resize:vertical;margin-bottom:10px;color:#777" oninput="onNote(this)">'+esc(logNote)+'</textarea>'
+    +'<button class="btn-p" id="savebtn" onclick="saveLog()">GEM TRÆNING</button>';
   document.getElementById("vlog").innerHTML=h;
 }
 
-async function saveLog(){
+let autoSaveTimer=null;
+function scheduleAutoSave(){
+  clearTimeout(autoSaveTimer);
+  autoSaveTimer=setTimeout(()=>saveLog(true),2000);
+}
+async function saveLog(silent=false){
   const type=getType(activeDate),btn=document.getElementById("savebtn");
   if(!type||!CU)return;
+  const hasData=logEx.some(ex=>ex.sets.some(s=>s.reps||s.weight));
+  if(silent&&!hasData)return;
   const data={date:activeDate,type,exercises:logEx,note:logNote,savedAt:new Date().toISOString(),userName:CU.displayName||CU.email.split("@")[0]};
-  if(btn){btn.disabled=true;btn.textContent="…";}
+  if(!silent&&btn){btn.disabled=true;btn.textContent="…";}
+  const lbl=document.getElementById("autosavelbl");
+  if(lbl)lbl.textContent="Gemmer…";
   await setDoc(doc(db,"users",CU.uid,"sessions",activeDate),data);
-  if(btn){btn.textContent="Gemt ✓";setTimeout(()=>{if(btn){btn.disabled=false;btn.textContent="GEM TRÆNING";}},2000);}
+  if(lbl)lbl.textContent="Gemt ✓";
+  setTimeout(()=>{const l=document.getElementById("autosavelbl");if(l)l.textContent="";},2000);
+  if(!silent&&btn){btn.textContent="Gemt ✓";setTimeout(()=>{if(btn){btn.disabled=false;btn.textContent="GEM TRÆNING";}},2000);}
+}
+function moveEx(xi,dir){
+  const ni=xi+dir;
+  if(ni<0||ni>=logEx.length)return;
+  [logEx[xi],logEx[ni]]=[logEx[ni],logEx[xi]];
+  renderLog();
 }
 
 function renderHistory(){
@@ -584,7 +640,7 @@ async function loadSettings(){
   programsSnap.forEach(d=>{customPrograms[d.id]=d.data();});
   if(settingsSnap.exists()&&settingsSnap.data().days&&Object.keys(settingsSnap.data().days).length){
     userSplit=settingsSnap.data().days;
-    showView("today");
+    showView("log");
   } else {
     userSplit={};
     showView("settings");

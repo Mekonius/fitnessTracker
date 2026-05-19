@@ -871,16 +871,19 @@ async function loadGifForExercise(exId,name){
 
 // ── Settings / Split ─────────────────────────────────────────────────────────
 async function loadSettings(){
-  const [settingsSnap,programsSnap,apiSnap]=await Promise.all([
+  const [settingsSnap,programsSnap]=await Promise.all([
     getDoc(doc(db,"users",CU.uid,"settings","split")),
-    getDocs(collection(db,"users",CU.uid,"programs")),
-    CU.email==="kenneth.l.thomsen@gmail.com"?getDoc(doc(db,"config","rapidapi")):Promise.resolve(null)
+    getDocs(collection(db,"users",CU.uid,"programs"))
   ]);
   customPrograms={};
   programsSnap.forEach(d=>{customPrograms[d.id]=d.data();});
-  if(apiSnap?.exists()&&apiSnap.data().key){
-    rapidApiKey=apiSnap.data().key;
-    localStorage.setItem("loft_api_key",rapidApiKey);
+  if(CU.email==="kenneth.l.thomsen@gmail.com"){
+    getDoc(doc(db,"config","rapidapi")).then(s=>{
+      if(s.exists()&&s.data().key){
+        rapidApiKey=s.data().key;
+        localStorage.setItem("loft_api_key",rapidApiKey);
+      }
+    }).catch(()=>{});
   }
   if(settingsSnap.exists()&&settingsSnap.data().days&&Object.keys(settingsSnap.data().days).length){
     userSplit=settingsSnap.data().days;

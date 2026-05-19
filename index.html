@@ -805,13 +805,13 @@ async function testApiKey(){
   if(!key){el.textContent="Indsæt en nøgle først.";el.style.color="#ff6b6b";return;}
   el.textContent="Tester...";el.style.color="#aaa";
   try{
-    const res=await fetch("https://exercisedb.p.rapidapi.com/exercises?limit=1&offset=0",{
+    const res=await fetch("https://exercisedb.p.rapidapi.com/exercises/name/bench%20press?limit=1",{
       headers:{"X-RapidAPI-Key":key,"X-RapidAPI-Host":"exercisedb.p.rapidapi.com"}
     });
     if(res.ok){el.textContent="Nøgle virker!";el.style.color="#c8ff00";}
     else{
       const d=await res.json().catch(()=>({}));
-      el.textContent="Fejl: "+(d.message||res.status);el.style.color="#ff6b6b";
+      el.textContent="Fejl ("+res.status+"): "+(d.message||"ukendt");el.style.color="#ff6b6b";
     }
   }catch(e){el.textContent="Netværksfejl.";el.style.color="#ff6b6b";}
 }

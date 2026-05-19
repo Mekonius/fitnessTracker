@@ -363,6 +363,7 @@ const pill=t=>'<span class="pill '+(t==="TRAEK"?"pill-t":t==="SKUB"?"pill-s":"pi
 let CU=null,sessions={},allUsers={},activeDate=tds(new Date()),userSplit={},customPrograms={};
 let curView="today",logEx=[],logNote="",openEx=null,histUid=null,unsubSess=null;
 let activeDaySelect=null,editingProgram=null,builderMode=null,catalogTab="RYG",logRating=null;
+let rapidApiKey=localStorage.getItem("loft_api_key")||"";
 
 // ── Window-exposed handlers ───────────────────────────────────────────────────
 window.onReps   = (xi,si,el)=>{logEx[xi].sets[si].reps=el.value.replace(/[^0-9]/g,"");el.value=logEx[xi].sets[si].reps;scheduleAutoSave();};
@@ -373,6 +374,7 @@ window.rmSet    = (xi,si)=>{logEx[xi].sets.splice(si,1);renderLog();};
 window.saveLog    = saveLog;
 window.moveEx     = moveEx;
 window.setLogRating = r=>{logRating=r;renderLog();};
+window.saveApiKey  = saveApiKey;
 window.toggleEx = id=>{openEx=openEx===id?null:id;renderProgram();};
 window.setDate  = ds=>{activeDate=ds;if(curView==="program")renderProgram();else if(curView==="log"){initLog();renderLog();}};
 window.showView = showView;
@@ -588,11 +590,17 @@ function renderProgram(){
   p.ex.forEach((ex,i)=>{
     const open=openEx===ex.id;
     h+='<div class="pcard" style="border-color:'+(open?p.color+'55':'#1a1a1a')+'"><div class="phdr" style="background:'+(open?p.bgColor:'#111')+'" onclick="toggleEx(\''+ex.id+'\')"><span style="font-family:\'Bebas Neue\';font-size:12px;color:'+p.color+';width:20px;flex-shrink:0">'+(i+1)+'</span><div style="flex:1;min-width:0"><div style="font-size:13px;color:#e0dcd4">'+esc(ex.name)+'</div><div style="font-size:10px;color:#444;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(ex.machine)+'</div></div><div style="text-align:right;flex-shrink:0;margin-right:8px"><div style="font-size:12px;color:#777">'+ex.sets+'×'+esc(ex.reps)+'</div><div style="font-size:10px;color:#333">'+ex.rest+'</div></div><span style="color:#333;font-size:12px">'+(open?"▲":"▼")+'</span></div>';
-    if(open)h+='<div style="background:#0c0c0c;padding:14px 16px;border-top:1px solid '+p.color+'22"><div style="margin-bottom:12px"><div style="font-size:10px;color:#444;letter-spacing:1.5px;margin-bottom:5px">MASKINE / UDSTYR</div><div style="font-size:12px;color:#777;line-height:1.6">'+esc(ex.machine)+'</div></div><div style="margin-bottom:12px"><div style="font-size:10px;color:#444;letter-spacing:1.5px;margin-bottom:5px">MUSKLER DER TRÆNES</div><div style="font-size:12px;color:'+p.color+';line-height:1.6;opacity:.85">'+esc(ex.muscles)+'</div></div><div><div style="font-size:10px;color:#444;letter-spacing:1.5px;margin-bottom:5px">TEKNIK & TIPS</div><div style="font-size:12px;color:#888;line-height:1.8">'+esc(ex.tip)+'</div></div></div>';
+    if(open)h+='<div style="background:#0c0c0c;padding:14px 16px;border-top:1px solid '+p.color+'22">'
+      +'<div id="gif-'+ex.id+'"></div>'
+      +'<div style="margin-bottom:12px"><div style="font-size:10px;color:#444;letter-spacing:1.5px;margin-bottom:5px">MASKINE / UDSTYR</div><div style="font-size:12px;color:#777;line-height:1.6">'+esc(ex.machine||"")+'</div></div>'
+      +(ex.muscles?'<div style="margin-bottom:12px"><div style="font-size:10px;color:#444;letter-spacing:1.5px;margin-bottom:5px">MUSKLER DER TRÆNES</div><div style="font-size:12px;color:'+p.color+';line-height:1.6;opacity:.85">'+esc(ex.muscles)+'</div></div>':"")
+      +(ex.tip?'<div><div style="font-size:10px;color:#444;letter-spacing:1.5px;margin-bottom:5px">TEKNIK & TIPS</div><div style="font-size:12px;color:#888;line-height:1.8">'+esc(ex.tip)+'</div></div>':"")
+      +'</div>';
     h+='</div>';
   });
   h+='<button class="btn-p" onclick="showView(\'log\')" style="margin-top:12px">START LOG →</button>';
   document.getElementById("vprogram").innerHTML=h;
+  if(openEx){const ex=p.ex.find(e=>e.id===openEx);if(ex)setTimeout(()=>loadGifForExercise(ex.id,ex.name),50);}
 }
 
 function initLog(){
@@ -707,6 +715,45 @@ async function loadHist(){
   if(histUid!==CU.uid){const snap=await getDocs(collection(db,"users",histUid,"sessions"));data={};snap.forEach(d=>{data[d.id]=d.data();});}
   renderHistContent(data);
 }
+// ── Exercise GIFs ─────────────────────────────────────────────────────────────
+function saveApiKey(){
+  const key=(document.getElementById("apikey-input")?.value||"").trim();
+  rapidApiKey=key;
+  localStorage.setItem("loft_api_key",key);
+  localStorage.removeItem("loft_gifs"); // clear cache when key changes
+  renderSettings();
+}
+async function loadGifForExercise(exId,name){
+  const el=document.getElementById("gif-"+exId);
+  if(!el)return;
+  const cache=JSON.parse(localStorage.getItem("loft_gifs")||"{}");
+  if(cache[exId]){
+    el.innerHTML='<img src="'+cache[exId]+'" alt="'+esc(name)+'" style="width:100%;max-height:220px;object-fit:cover;border-radius:6px;margin-bottom:12px;display:block"/>';
+    return;
+  }
+  if(!rapidApiKey){
+    el.innerHTML='<div style="font-size:10px;color:#2a2a2a;text-align:center;padding:6px 0">Tilføj RapidAPI-nøgle i Split-indstillinger for at se animationer</div>';
+    return;
+  }
+  el.innerHTML='<div style="font-size:10px;color:#333;text-align:center;padding:12px 0">Henter...</div>';
+  try{
+    const term=name.toLowerCase().replace(/\s*\/.*$/,"").replace(/[^a-z0-9 ]/g,"").trim();
+    const res=await fetch("https://exercisedb.p.rapidapi.com/exercises/name/"+encodeURIComponent(term)+"?limit=1",{
+      headers:{"X-RapidAPI-Key":rapidApiKey,"X-RapidAPI-Host":"exercisedb.p.rapidapi.com"}
+    });
+    const data=await res.json();
+    if(data?.[0]?.gifUrl){
+      const url=data[0].gifUrl;
+      const nc=JSON.parse(localStorage.getItem("loft_gifs")||"{}");
+      nc[exId]=url;localStorage.setItem("loft_gifs",JSON.stringify(nc));
+      if(document.getElementById("gif-"+exId))
+        document.getElementById("gif-"+exId).innerHTML='<img src="'+url+'" alt="'+esc(name)+'" style="width:100%;max-height:220px;object-fit:cover;border-radius:6px;margin-bottom:12px;display:block"/>';
+    } else {
+      el.innerHTML="";
+    }
+  }catch(e){el.innerHTML="";}
+}
+
 // ── Settings / Split ─────────────────────────────────────────────────────────
 async function loadSettings(){
   const [settingsSnap,programsSnap]=await Promise.all([
@@ -798,6 +845,15 @@ function renderSettings(){
   const trainDays=Object.keys(userSplit).length;
   if(trainDays)h+='<div style="font-size:11px;color:#555;margin-bottom:16px">'+trainDays+' træningsdage pr. uge</div>';
   h+='<button class="btn-p"'+(trainDays?'':' disabled')+' onclick="saveSplit()">GEM SPLIT</button>';
+  // API key section
+  h+='<div style="margin-top:32px;padding-top:20px;border-top:1px solid #1a1a1a">'
+    +'<div style="font-size:10px;color:#444;letter-spacing:1.5px;margin-bottom:8px">ØVELSESBILLEDER (VALGFRI)</div>'
+    +'<div style="font-size:11px;color:#333;line-height:1.8;margin-bottom:12px">Animerede GIFs fra ExerciseDB. Kræver gratis API-nøgle:<br>'
+    +'1. Gå til <span style="color:#777">rapidapi.com</span><br>2. Søg efter "ExerciseDB" og tilmeld dig gratis<br>3. Kopier din nøgle herunder</div>'
+    +'<input id="apikey-input" class="field" type="password" placeholder="Indsæt RapidAPI-nøgle..." value="'+esc(rapidApiKey)+'"/>'
+    +'<button class="btn-g" style="width:auto;padding:9px 18px;margin-top:8px;font-size:12px" onclick="saveApiKey()">'+(rapidApiKey?"OPDATER NØGLE":"GEM NØGLE")+'</button>'
+    +(rapidApiKey?'<div style="font-size:10px;color:#2a5a2a;margin-top:8px">Nøgle gemt — GIFs hentes automatisk.</div>':"")
+    +'</div>';
   document.getElementById("vsettings").innerHTML=h;
 }
 // ── Program Builder ───────────────────────────────────────────────────────────

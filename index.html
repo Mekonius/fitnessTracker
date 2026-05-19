@@ -868,13 +868,15 @@ async function loadGifForExercise(exId,name){
       return;
     }
     const data=JSON.parse(r.text);
-    if(data?.[0]?.gifUrl){
-      const gifUrl=data[0].gifUrl;
+    const hit=data?.[0];
+    if(hit){
+      const gifUrl=(hit.gifUrl)||"https://v2.exercisedb.io/image/"+hit.id+".gif";
+      console.log("GIF url:",gifUrl);
       setDoc(doc(db,"exercises",exId),{gifUrl:gifUrl,name}).catch(()=>{});
       lc[exId]=gifUrl;localStorage.setItem("loft_gifs",JSON.stringify(lc));
       showGif(exId,gifUrl,name);
     } else {
-      console.warn("No GIF found for:",term,"response:",data);
+      console.warn("No match for:",term);
       el.innerHTML='';
     }
   }catch(e){

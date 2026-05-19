@@ -366,7 +366,6 @@ const pill=t=>'<span class="pill '+(t==="TRAEK"?"pill-t":t==="SKUB"?"pill-s":"pi
 let CU=null,sessions={},allUsers={},activeDate=tds(new Date()),userSplit={},customPrograms={};
 let curView="today",logEx=[],logNote="",openEx=null,histUid=null,unsubSess=null;
 let activeDaySelect=null,editingProgram=null,builderMode=null,catalogTab="RYG",logRating=null;
-let rapidApiKey=localStorage.getItem("loft_api_key")||"";
 
 // ── Window-exposed handlers ───────────────────────────────────────────────────
 window.onReps   = (xi,si,el)=>{logEx[xi].sets[si].reps=el.value.replace(/[^0-9]/g,"");el.value=logEx[xi].sets[si].reps;scheduleAutoSave();};
@@ -376,8 +375,6 @@ window.addSet   = xi=>{logEx[xi].sets.push(iSet());renderLog();};
 window.rmSet    = (xi,si)=>{logEx[xi].sets.splice(si,1);renderLog();};
 window.saveLog    = saveLog;
 window.setLogRating = r=>{logRating=r;renderLog();};
-window.saveApiKey  = saveApiKey;
-window.testApiKey  = testApiKey;
 window.toggleEx = id=>{openEx=openEx===id?null:id;renderProgram();};
 window.setDate  = ds=>{activeDate=ds;if(curView==="program")renderProgram();else if(curView==="log"){initLog();renderLog();}};
 window.showView = showView;
@@ -792,38 +789,7 @@ async function loadHist(){
   if(histUid!==CU.uid){const snap=await getDocs(collection(db,"users",histUid,"sessions"));data={};snap.forEach(d=>{data[d.id]=d.data();});}
   renderHistContent(data);
 }
-// ── Exercise GIFs ─────────────────────────────────────────────────────────────
-function saveApiKey(){
-  const key=(document.getElementById("apikey-input")?.value||"").trim();
-  rapidApiKey=key;
-  localStorage.setItem("loft_api_key",key);
-  localStorage.removeItem("loft_gifs");
-  renderSettings();
-}
-async function testApiKey(){
-  const key=(document.getElementById("apikey-input")?.value||"").trim();
-  const el=document.getElementById("apikey-status");
-  if(!el)return;
-  if(!key){el.textContent="Indsæt en nøgle først.";el.style.color="#ff6b6b";return;}
-  el.textContent="Tester...";el.style.color="#aaa";
-  try{
-    const res=await fetch("https://exercisedb.p.rapidapi.com/exercises/name/bench%20press?limit=1",{
-      headers:{"X-RapidAPI-Key":key,"X-RapidAPI-Host":"exercisedb.p.rapidapi.com"}
-    });
-    if(res.ok){
-      rapidApiKey=key;
-      localStorage.setItem("loft_api_key",key);
-      localStorage.removeItem("loft_gifs");
-      setDoc(doc(db,"config","rapidapi"),{key}).catch(()=>{});
-      el.textContent="Nøgle virker! Gemt.";el.style.color="#c8ff00";
-      const inp=document.getElementById("apikey-input");if(inp)inp.value=key;
-    }
-    else{
-      const d=await res.json().catch(()=>({}));
-      el.textContent="Fejl ("+res.status+"): "+(d.message||"ukendt");el.style.color="#ff6b6b";
-    }
-  }catch(e){el.textContent="Netværksfejl.";el.style.color="#ff6b6b";}
-}
+// ── Exercise images ───────────────────────────────────────────────────────────
 function showGif(exId,url,name){
   const el=document.getElementById("gif-"+exId);
   if(el)el.innerHTML='<img src="'+url+'" alt="'+esc(name)+'" style="width:100%;max-height:220px;object-fit:cover;border-radius:6px;margin-bottom:12px;display:block"/>';
@@ -844,7 +810,8 @@ async function loadGifForExercise(exId,name){
   if(!el)return;
   const lc=JSON.parse(localStorage.getItem("loft_gifs")||"{}");
   if(lc[exId]){showGif(exId,lc[exId],name);return;}
-  el.innerHTML='<div style="font-size:10px;color:#555;text-align:center;padding:10px 0">Henter...</div>';
+  el.innerHTML='<div style="font-size:10px;color:#444;text-align:center;padding:10px 0">Henter...</div>';
+  // 1. Firestore shared cache
   try{
     const snap=await getDoc(doc(db,"exercises",exId));
     if(snap.exists()&&snap.data().gifUrl){
@@ -852,37 +819,23 @@ async function loadGifForExercise(exId,name){
       lc[exId]=url;localStorage.setItem("loft_gifs",JSON.stringify(lc));
       showGif(exId,url,name);return;
     }
-  }catch(e){console.warn("Firestore GIF read:",e.message);}
-  if(!rapidApiKey){el.innerHTML='';return;}
-  const term=name.toLowerCase().replace(/\s*\/.*$/,"").replace(/[^a-z0-9 ]/g,"").trim();
-  const url="https://exercisedb.p.rapidapi.com/exercises/name/"+encodeURIComponent(term)+"?limit=1";
-  const hdrs={"X-RapidAPI-Key":rapidApiKey,"X-RapidAPI-Host":"exercisedb.p.rapidapi.com"};
-  console.log("GIF fetch:",term);
+  }catch(e){}
+  // 2. wger.de — free, no API key
   try{
-    const r=await xhrGet(url,hdrs);
-    console.log("GIF response:",r.status,r.text.slice(0,120));
-    if(!r.ok){
-      let msg="Fejl "+r.status;
-      try{msg=JSON.parse(r.text).message||msg;}catch(_){}
-      el.innerHTML='<div style="font-size:10px;color:#c8a000;padding:4px 0">'+msg+'</div>';
-      return;
+    const term=name.toLowerCase().replace(/\s*\/.*$/,"").replace(/[^a-z0-9 ]/g,"").trim();
+    const r=await xhrGet("https://wger.de/api/v2/exercise/search/?term="+encodeURIComponent(term)+"&language=english&format=json",{});
+    if(r.ok){
+      const d=JSON.parse(r.text);
+      const hit=d?.suggestions?.[0]?.data;
+      const imgUrl=hit?.image||hit?.image_thumbnail;
+      if(imgUrl){
+        setDoc(doc(db,"exercises",exId),{gifUrl:imgUrl,name}).catch(()=>{});
+        lc[exId]=imgUrl;localStorage.setItem("loft_gifs",JSON.stringify(lc));
+        showGif(exId,imgUrl,name);return;
+      }
     }
-    const data=JSON.parse(r.text);
-    const hit=data?.[0];
-    if(hit){
-      const gifUrl=(hit.gifUrl)||"https://v2.exercisedb.io/image/"+hit.id+".gif";
-      console.log("GIF url:",gifUrl);
-      setDoc(doc(db,"exercises",exId),{gifUrl:gifUrl,name}).catch(()=>{});
-      lc[exId]=gifUrl;localStorage.setItem("loft_gifs",JSON.stringify(lc));
-      showGif(exId,gifUrl,name);
-    } else {
-      console.warn("No match for:",term);
-      el.innerHTML='';
-    }
-  }catch(e){
-    console.error("GIF fetch error:",e.message);
-    el.innerHTML='<div style="font-size:10px;color:#c8a000;padding:4px 0">'+e.message+'</div>';
-  }
+  }catch(e){}
+  el.innerHTML='';
 }
 
 // ── Settings / Split ─────────────────────────────────────────────────────────
@@ -893,14 +846,6 @@ async function loadSettings(){
   ]);
   customPrograms={};
   programsSnap.forEach(d=>{customPrograms[d.id]=d.data();});
-  if(CU.email==="kenneth.l.thomsen@gmail.com"){
-    getDoc(doc(db,"config","rapidapi")).then(s=>{
-      if(s.exists()&&s.data().key){
-        rapidApiKey=s.data().key;
-        localStorage.setItem("loft_api_key",rapidApiKey);
-      }
-    }).catch(()=>{});
-  }
   if(settingsSnap.exists()&&settingsSnap.data().days&&Object.keys(settingsSnap.data().days).length){
     userSplit=settingsSnap.data().days;
     showView("log");
@@ -986,15 +931,6 @@ function renderSettings(){
   h+='<button class="btn-p"'+(trainDays?'':' disabled')+' onclick="saveSplit()">GEM SPLIT</button>';
   // API key section — only visible to app owner
   if(CU&&CU.email==="kenneth.l.thomsen@gmail.com"){
-    h+='<div style="margin-top:32px;padding-top:20px;border-top:1px solid #1a1a1a">'
-      +'<div style="font-size:10px;color:#444;letter-spacing:1.5px;margin-bottom:8px">ØVELSESBILLEDER (ADMIN)</div>'
-      +'<input id="apikey-input" class="field" type="password" placeholder="Indsæt RapidAPI-nøgle..." value="'+esc(rapidApiKey)+'"/>'
-      +'<div style="display:flex;gap:8px;margin-top:8px">'
-      +'<button class="btn-g" style="width:auto;padding:9px 18px;font-size:12px" onclick="saveApiKey()">'+(rapidApiKey?"OPDATER":"GEM")+'</button>'
-      +'<button class="btn-g" style="width:auto;padding:9px 18px;font-size:12px;background:#1a1a2a;border-color:#2a2a4a;color:#aaa" onclick="testApiKey()">TEST</button>'
-      +'</div>'
-      +'<div id="apikey-status" style="font-size:11px;margin-top:8px;min-height:16px">'+(rapidApiKey?'<span style="color:#2a5a2a">Nøgle gemt.</span>':"")+'</div>'
-      +'</div>';
   }
   document.getElementById("vsettings").innerHTML=h;
 }

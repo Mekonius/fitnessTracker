@@ -481,7 +481,7 @@ function startListen(){
     if(curView==="history"&&histUid===CU.uid)renderHistContent(sessions);
   });
 }
-async function loadUsers(){const snap=await getDocs(collection(db,"users"));allUsers={};snap.forEach(d=>{allUsers[d.id]=d.data();});}
+async function loadUsers(){try{const snap=await getDocs(collection(db,"users"));allUsers={};snap.forEach(d=>{allUsers[d.id]=d.data();});}catch(e){}}
 function updateHdr(){
   const today=tds(new Date()),type=getType(today);
   document.getElementById("hdate").innerHTML=cap(fmtDate(today))+" — "

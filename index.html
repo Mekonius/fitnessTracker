@@ -34,7 +34,9 @@ input:focus,textarea:focus{border-color:#c8ff00!important}
 .tab.active{border-bottom-color:#c8ff00;color:#c8ff00}
 .urow{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:6px;margin-bottom:5px;border:1px solid #1a1a1a;background:#111}
 .sbox{background:#111;border:1px solid #1a1a1a;border-radius:6px;padding:12px 10px}
-.excard{background:#111;border:1px solid #1a1a1a;border-radius:8px;padding:14px;margin-bottom:10px}
+.excard{background:#111;border:1px solid #1a1a1a;border-radius:8px;padding:14px;margin-bottom:10px;transition:opacity .15s,border-color .15s}
+.excard.drag-over{border-color:#c8ff0055;background:#131a00}
+.drag-handle{cursor:grab;color:#2a2a2a;font-size:20px;padding:0 6px 0 0;user-select:none;-webkit-user-select:none;touch-action:none;line-height:1;flex-shrink:0}
 .pcard{border:1px solid #1a1a1a;border-radius:8px;margin-bottom:8px;overflow:hidden}
 .phdr{display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;background:#111}
 .sinput{background:#0a0a0a;border:1px solid #1e1e1e;border-radius:4px;color:#f0ece4;padding:7px;font-size:15px;text-align:center;font-family:inherit;width:100%}
@@ -372,7 +374,6 @@ window.onNote   = el=>{logNote=el.value;};
 window.addSet   = xi=>{logEx[xi].sets.push(iSet());renderLog();};
 window.rmSet    = (xi,si)=>{logEx[xi].sets.splice(si,1);renderLog();};
 window.saveLog    = saveLog;
-window.moveEx     = moveEx;
 window.setLogRating = r=>{logRating=r;renderLog();};
 window.saveApiKey  = saveApiKey;
 window.toggleEx = id=>{openEx=openEx===id?null:id;renderProgram();};
@@ -642,16 +643,14 @@ function renderLog(){
   logEx.forEach((ex,xi)=>{
     const def=p.ex.find(e=>e.id===ex.id)||{};
     const isFirst=xi===0,isLast=xi===logEx.length-1;
-    h+='<div class="excard">'
+    h+='<div class="excard" draggable="true" data-xi="'+xi+'">'
       +'<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:10px">'
+      +'<div class="drag-handle" data-xi="'+xi+'">⠿</div>'
       +'<div style="flex:1"><div style="font-size:13px;color:#e0dcd4">'+esc(ex.name)+'</div>'
       +(def.muscles?'<div style="font-size:10px;color:'+p.color+';opacity:.7;margin-top:2px">'+esc(def.muscles)+'</div>':"")
       +(def.reps?'<div style="font-size:10px;color:#333;margin-top:2px">Mål: '+def.sets+' sæt · '+esc(def.reps)+' · '+def.rest+'</div>':"")
       +'</div>'
-      +'<div style="display:flex;flex-direction:column;gap:2px">'
-      +'<button class="rmb" style="font-size:14px;color:'+(isFirst?"#1a1a1a":"#444")+'" onclick="moveEx('+xi+',-1)" '+(isFirst?"disabled":"")+'>↑</button>'
-      +'<button class="rmb" style="font-size:14px;color:'+(isLast?"#1a1a1a":"#444")+'" onclick="moveEx('+xi+',1)" '+(isLast?"disabled":"")+'>↓</button>'
-      +'</div></div>'
+      +'</div>'
       +'<div style="display:grid;grid-template-columns:28px 1fr 1fr 28px;gap:5px;margin-bottom:6px">'
       +'<span></span><span style="font-size:10px;color:#444;text-align:center;letter-spacing:1px">REPS</span>'
       +'<span style="font-size:10px;color:#444;text-align:center;letter-spacing:1px">'+(def.isTime?"SEK":"KG")+'</span><span></span></div>';
@@ -673,6 +672,94 @@ function renderLog(){
   h+='</div></div>';
   h+='<button class="btn-p" id="savebtn" onclick="saveLog()">GEM TRÆNING</button>';
   document.getElementById("vlog").innerHTML=h;
+  setupLogDrag();
+}
+
+function setupLogDrag(){
+  const cards=[...document.querySelectorAll('#vlog .excard')];
+  let dragSrc=null;
+
+  cards.forEach(card=>{
+    const xi=+card.dataset.xi;
+
+    // ── Desktop drag & drop ───────────────────────────────────────
+    card.addEventListener('dragstart',e=>{
+      dragSrc=xi;
+      e.dataTransfer.effectAllowed='move';
+      setTimeout(()=>{card.style.opacity='0.35';},0);
+    });
+    card.addEventListener('dragend',()=>{
+      card.style.opacity='1';
+      cards.forEach(c=>c.classList.remove('drag-over'));
+    });
+    card.addEventListener('dragover',e=>{
+      e.preventDefault();
+      e.dataTransfer.dropEffect='move';
+      cards.forEach(c=>c.classList.remove('drag-over'));
+      if(dragSrc!==null&&xi!==dragSrc)card.classList.add('drag-over');
+    });
+    card.addEventListener('drop',e=>{
+      e.preventDefault();
+      cards.forEach(c=>c.classList.remove('drag-over'));
+      if(dragSrc===null||dragSrc===xi)return;
+      const moved=logEx.splice(dragSrc,1)[0];
+      logEx.splice(xi,0,moved);
+      dragSrc=null;
+      renderLog();scheduleAutoSave();
+    });
+
+    // ── Touch drag (mobile) ───────────────────────────────────────
+    const handle=card.querySelector('.drag-handle');
+    if(!handle)return;
+    let touchSrc=null,clone=null,startY=0,baseTop=0;
+
+    handle.addEventListener('touchstart',e=>{
+      touchSrc=xi;
+      startY=e.touches[0].clientY;
+      baseTop=card.getBoundingClientRect().top;
+      clone=card.cloneNode(true);
+      Object.assign(clone.style,{
+        position:'fixed',left:'16px',right:'16px',width:'',
+        top:baseTop+'px',opacity:'0.9',zIndex:'9999',
+        pointerEvents:'none',borderColor:'#c8ff0055'
+      });
+      document.body.appendChild(clone);
+      card.style.opacity='0.3';
+      e.preventDefault();
+    },{passive:false});
+
+    handle.addEventListener('touchmove',e=>{
+      if(touchSrc===null||!clone)return;
+      const dy=e.touches[0].clientY-startY;
+      clone.style.top=(baseTop+dy)+'px';
+      const cx=e.touches[0].clientX,cy=e.touches[0].clientY;
+      cards.forEach(c=>{
+        const r=c.getBoundingClientRect();
+        if(cy>=r.top&&cy<=r.bottom&&c!==card)c.classList.add('drag-over');
+        else c.classList.remove('drag-over');
+      });
+      e.preventDefault();
+    },{passive:false});
+
+    handle.addEventListener('touchend',e=>{
+      if(touchSrc===null)return;
+      if(clone){clone.remove();clone=null;}
+      card.style.opacity='1';
+      const t=e.changedTouches[0];
+      const target=cards.find(c=>{
+        const r=c.getBoundingClientRect();
+        return t.clientY>=r.top&&t.clientY<=r.bottom&&c!==card;
+      });
+      cards.forEach(c=>c.classList.remove('drag-over'));
+      if(target){
+        const ti=+target.dataset.xi;
+        const moved=logEx.splice(touchSrc,1)[0];
+        logEx.splice(ti,0,moved);
+        renderLog();scheduleAutoSave();
+      }
+      touchSrc=null;
+    });
+  });
 }
 
 let autoSaveTimer=null;
@@ -694,12 +781,6 @@ async function saveLog(silent=false){
   setTimeout(()=>{const l=document.getElementById("autosavelbl");if(l)l.textContent="";},2000);
   if(!silent&&btn){btn.textContent="Gemt ✓";setTimeout(()=>{if(btn){btn.disabled=false;btn.textContent="GEM TRÆNING";}},2000);}
   if(!silent&&logRating==="darlig")setTimeout(()=>showView("today"),1200);
-}
-function moveEx(xi,dir){
-  const ni=xi+dir;
-  if(ni<0||ni>=logEx.length)return;
-  [logEx[xi],logEx[ni]]=[logEx[ni],logEx[xi]];
-  renderLog();
 }
 
 function renderHistory(){

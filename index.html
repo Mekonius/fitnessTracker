@@ -814,6 +814,7 @@ async function testApiKey(){
       rapidApiKey=key;
       localStorage.setItem("loft_api_key",key);
       localStorage.removeItem("loft_gifs");
+      setDoc(doc(db,"config","rapidapi"),{key}).catch(()=>{});
       el.textContent="Nøgle virker! Gemt.";el.style.color="#c8ff00";
       const inp=document.getElementById("apikey-input");if(inp)inp.value=key;
     }
@@ -870,12 +871,17 @@ async function loadGifForExercise(exId,name){
 
 // ── Settings / Split ─────────────────────────────────────────────────────────
 async function loadSettings(){
-  const [settingsSnap,programsSnap]=await Promise.all([
+  const [settingsSnap,programsSnap,apiSnap]=await Promise.all([
     getDoc(doc(db,"users",CU.uid,"settings","split")),
-    getDocs(collection(db,"users",CU.uid,"programs"))
+    getDocs(collection(db,"users",CU.uid,"programs")),
+    CU.email==="kenneth.l.thomsen@gmail.com"?getDoc(doc(db,"config","rapidapi")):Promise.resolve(null)
   ]);
   customPrograms={};
   programsSnap.forEach(d=>{customPrograms[d.id]=d.data();});
+  if(apiSnap?.exists()&&apiSnap.data().key){
+    rapidApiKey=apiSnap.data().key;
+    localStorage.setItem("loft_api_key",rapidApiKey);
+  }
   if(settingsSnap.exists()&&settingsSnap.data().days&&Object.keys(settingsSnap.data().days).length){
     userSplit=settingsSnap.data().days;
     showView("log");

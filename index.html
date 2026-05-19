@@ -8,6 +8,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 <meta name="apple-mobile-web-app-title" content="LØFT"/>
 <link rel="manifest" href="manifest.json"/>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏋️</text></svg>"/>
 <link rel="apple-touch-icon" href="apple-touch-icon.png"/>
 <title>LØFT</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Bebas+Neue&display=swap" rel="stylesheet"/>
@@ -401,15 +402,7 @@ window.saveCustomProgram=saveCustomProgram;
 // ── Google Sign-In ────────────────────────────────────────────────────────────
 async function doGoogle(){
   try {
-    // Try popup first, fall back to redirect on mobile
-    const result = await signInWithPopup(auth, googleProvider).catch(async e => {
-      if (e.code === "auth/popup-blocked" || e.code === "auth/popup-closed-by-user") {
-        await signInWithRedirect(auth, googleProvider);
-        return null;
-      }
-      throw e;
-    });
-    if (result) await handleNewSocialUser(result.user);
+    await signInWithRedirect(auth, googleProvider);
   } catch(e) {
     showAuthError(ERRS[e.code] || "Google login fejlede. Prøv igen.");
   }

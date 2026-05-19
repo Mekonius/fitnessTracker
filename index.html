@@ -855,15 +855,15 @@ function renderSettings(){
   const trainDays=Object.keys(userSplit).length;
   if(trainDays)h+='<div style="font-size:11px;color:#555;margin-bottom:16px">'+trainDays+' træningsdage pr. uge</div>';
   h+='<button class="btn-p"'+(trainDays?'':' disabled')+' onclick="saveSplit()">GEM SPLIT</button>';
-  // API key section
-  h+='<div style="margin-top:32px;padding-top:20px;border-top:1px solid #1a1a1a">'
-    +'<div style="font-size:10px;color:#444;letter-spacing:1.5px;margin-bottom:8px">ØVELSESBILLEDER (VALGFRI)</div>'
-    +'<div style="font-size:11px;color:#333;line-height:1.8;margin-bottom:12px">Animerede GIFs fra ExerciseDB. Kræver gratis API-nøgle:<br>'
-    +'1. Gå til <span style="color:#777">rapidapi.com</span><br>2. Søg efter "ExerciseDB" og tilmeld dig gratis<br>3. Kopier din nøgle herunder</div>'
-    +'<input id="apikey-input" class="field" type="password" placeholder="Indsæt RapidAPI-nøgle..." value="'+esc(rapidApiKey)+'"/>'
-    +'<button class="btn-g" style="width:auto;padding:9px 18px;margin-top:8px;font-size:12px" onclick="saveApiKey()">'+(rapidApiKey?"OPDATER NØGLE":"GEM NØGLE")+'</button>'
-    +(rapidApiKey?'<div style="font-size:10px;color:#2a5a2a;margin-top:8px">Nøgle gemt — GIFs hentes automatisk.</div>':"")
-    +'</div>';
+  // API key section — only visible to app owner
+  if(CU&&CU.email==="kenneth.l.thomsen@gmail.com"){
+    h+='<div style="margin-top:32px;padding-top:20px;border-top:1px solid #1a1a1a">'
+      +'<div style="font-size:10px;color:#444;letter-spacing:1.5px;margin-bottom:8px">ØVELSESBILLEDER (ADMIN)</div>'
+      +'<input id="apikey-input" class="field" type="password" placeholder="Indsæt RapidAPI-nøgle..." value="'+esc(rapidApiKey)+'"/>'
+      +'<button class="btn-g" style="width:auto;padding:9px 18px;margin-top:8px;font-size:12px" onclick="saveApiKey()">'+(rapidApiKey?"OPDATER NØGLE":"GEM NØGLE")+'</button>'
+      +(rapidApiKey?'<div style="font-size:10px;color:#2a5a2a;margin-top:8px">Nøgle gemt.</div>':"")
+      +'</div>';
+  }
   document.getElementById("vsettings").innerHTML=h;
 }
 // ── Program Builder ───────────────────────────────────────────────────────────

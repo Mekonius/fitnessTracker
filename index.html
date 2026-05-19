@@ -840,6 +840,13 @@ function showGif(exId,url,name){
   const el=document.getElementById("gif-"+exId);
   if(el)el.innerHTML='<img src="'+url+'" alt="'+esc(name)+'" style="width:100%;max-height:220px;object-fit:cover;border-radius:6px;margin-bottom:12px;display:block"/>';
 }
+function showInstructions(exId,instructions){
+  const el=document.getElementById("gif-"+exId);
+  if(!el||!instructions?.length)return;
+  el.innerHTML='<ol style="margin:0 0 12px 0;padding-left:18px;list-style:decimal">'
+    +instructions.map(s=>'<li style="font-size:11px;color:#777;line-height:1.7;margin-bottom:2px">'+esc(s)+'</li>').join('')
+    +'</ol>';
+}
 function xhrGet(url,headers){
   return new Promise((resolve,reject)=>{
     const x=new XMLHttpRequest();
@@ -862,11 +869,15 @@ async function loadGifForExercise(exId,name){
   try{
     console.log("GIF["+exId+"]: checking Firestore...");
     const snap=await getDoc(doc(db,"exercises",exId));
-    if(snap.exists()&&snap.data().gifUrl&&!snap.data().gifUrl.includes("wger.de")){
-      console.log("GIF["+exId+"]: Firestore hit:",snap.data().gifUrl);
-      const url=snap.data().gifUrl;
-      lc[exId]=url;localStorage.setItem("loft_gifs",JSON.stringify(lc));
-      showGif(exId,url,name);return;
+    const fd=snap.exists()?snap.data():null;
+    if(fd?.gifUrl&&!fd.gifUrl.includes("wger.de")){
+      console.log("GIF["+exId+"]: Firestore gifUrl hit");
+      lc[exId]=fd.gifUrl;localStorage.setItem("loft_gifs",JSON.stringify(lc));
+      showGif(exId,fd.gifUrl,name);return;
+    }
+    if(fd?.instructions?.length){
+      console.log("GIF["+exId+"]: Firestore instructions hit");
+      showInstructions(exId,fd.instructions);return;
     }
     console.log("GIF["+exId+"]: Firestore miss");
   }catch(e){console.warn("GIF["+exId+"]: Firestore error:",e.message);}
@@ -883,11 +894,17 @@ async function loadGifForExercise(exId,name){
       const hit=data?.[0];
       console.log("GIF["+exId+"]: full hit:",JSON.stringify(hit));
       if(hit){
-        const gifUrl=hit.gifUrl||"https://v2.exercisedb.io/image/"+hit.id+".gif";
-        console.log("GIF["+exId+"]: using gifUrl:",gifUrl,"(from field:",!!hit.gifUrl,")");
-        setDoc(doc(db,"exercises",exId),{gifUrl,name}).catch(()=>{});
-        lc[exId]=gifUrl;localStorage.setItem("loft_gifs",JSON.stringify(lc));
-        showGif(exId,gifUrl,name);return;
+        if(hit.gifUrl){
+          console.log("GIF["+exId+"]: gifUrl found:",hit.gifUrl);
+          setDoc(doc(db,"exercises",exId),{gifUrl:hit.gifUrl,name}).catch(()=>{});
+          lc[exId]=hit.gifUrl;localStorage.setItem("loft_gifs",JSON.stringify(lc));
+          showGif(exId,hit.gifUrl,name);return;
+        }
+        if(hit.instructions?.length){
+          console.log("GIF["+exId+"]: no gifUrl, using instructions");
+          setDoc(doc(db,"exercises",exId),{instructions:hit.instructions,name}).catch(()=>{});
+          showInstructions(exId,hit.instructions);return;
+        }
       }
     } else {
       console.warn("GIF["+exId+"]: API error",r.status,":",r.text.slice(0,300));

@@ -377,6 +377,7 @@ window.rmSet    = (xi,si)=>{logEx[xi].sets.splice(si,1);renderLog();};
 window.saveLog    = saveLog;
 window.setLogRating = r=>{logRating=r;renderLog();};
 window.saveApiKey  = saveApiKey;
+window.testApiKey  = testApiKey;
 window.toggleEx = id=>{openEx=openEx===id?null:id;renderProgram();};
 window.setDate  = ds=>{activeDate=ds;if(curView==="program")renderProgram();else if(curView==="log"){initLog();renderLog();}};
 window.showView = showView;
@@ -794,8 +795,25 @@ function saveApiKey(){
   const key=(document.getElementById("apikey-input")?.value||"").trim();
   rapidApiKey=key;
   localStorage.setItem("loft_api_key",key);
-  localStorage.removeItem("loft_gifs"); // clear cache when key changes
+  localStorage.removeItem("loft_gifs");
   renderSettings();
+}
+async function testApiKey(){
+  const key=(document.getElementById("apikey-input")?.value||"").trim();
+  const el=document.getElementById("apikey-status");
+  if(!el)return;
+  if(!key){el.textContent="Indsæt en nøgle først.";el.style.color="#ff6b6b";return;}
+  el.textContent="Tester...";el.style.color="#aaa";
+  try{
+    const res=await fetch("https://exercisedb.p.rapidapi.com/exercises?limit=1&offset=0",{
+      headers:{"X-RapidAPI-Key":key,"X-RapidAPI-Host":"exercisedb.p.rapidapi.com"}
+    });
+    if(res.ok){el.textContent="Nøgle virker!";el.style.color="#c8ff00";}
+    else{
+      const d=await res.json().catch(()=>({}));
+      el.textContent="Fejl: "+(d.message||res.status);el.style.color="#ff6b6b";
+    }
+  }catch(e){el.textContent="Netværksfejl.";el.style.color="#ff6b6b";}
 }
 function showGif(exId,url,name){
   const el=document.getElementById("gif-"+exId);
@@ -934,8 +952,11 @@ function renderSettings(){
     h+='<div style="margin-top:32px;padding-top:20px;border-top:1px solid #1a1a1a">'
       +'<div style="font-size:10px;color:#444;letter-spacing:1.5px;margin-bottom:8px">ØVELSESBILLEDER (ADMIN)</div>'
       +'<input id="apikey-input" class="field" type="password" placeholder="Indsæt RapidAPI-nøgle..." value="'+esc(rapidApiKey)+'"/>'
-      +'<button class="btn-g" style="width:auto;padding:9px 18px;margin-top:8px;font-size:12px" onclick="saveApiKey()">'+(rapidApiKey?"OPDATER NØGLE":"GEM NØGLE")+'</button>'
-      +(rapidApiKey?'<div style="font-size:10px;color:#2a5a2a;margin-top:8px">Nøgle gemt.</div>':"")
+      +'<div style="display:flex;gap:8px;margin-top:8px">'
+      +'<button class="btn-g" style="width:auto;padding:9px 18px;font-size:12px" onclick="saveApiKey()">'+(rapidApiKey?"OPDATER":"GEM")+'</button>'
+      +'<button class="btn-g" style="width:auto;padding:9px 18px;font-size:12px;background:#1a1a2a;border-color:#2a2a4a;color:#aaa" onclick="testApiKey()">TEST</button>'
+      +'</div>'
+      +'<div id="apikey-status" style="font-size:11px;margin-top:8px;min-height:16px">'+(rapidApiKey?'<span style="color:#2a5a2a">Nøgle gemt.</span>':"")+'</div>'
       +'</div>';
   }
   document.getElementById("vsettings").innerHTML=h;

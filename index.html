@@ -790,6 +790,43 @@ async function loadHist(){
   renderHistContent(data);
 }
 // ── Exercise images ───────────────────────────────────────────────────────────
+async function debugWger(){
+  const name=(document.getElementById("dbg-input")?.value||"").trim();
+  const out=document.getElementById("dbg-result");
+  if(!out)return;
+  if(!name){out.innerHTML='<span style="color:#ff6b6b">Indtast et navn.</span>';return;}
+  out.innerHTML='<span style="color:#555">Henter...</span>';
+  const term=name.toLowerCase().replace(/\s*\/.*$/,"").replace(/[^a-z0-9 ]/g,"").trim();
+  const url="https://wger.de/api/v2/exerciseinfo/?format=json&language=2&limit=5&name__icontains="+encodeURIComponent(term);
+  out.innerHTML='<span style="color:#333;word-break:break-all">URL: '+esc(url)+'</span>';
+  try{
+    const r=await xhrGet(url,{});
+    out.innerHTML+='<br><span style="color:#555">Status: '+r.status+'</span>';
+    if(r.ok){
+      const d=JSON.parse(r.text);
+      const results=d?.results||[];
+      out.innerHTML+='<br><span style="color:#555">Resultater: '+results.length+'</span>';
+      if(results.length){
+        out.innerHTML+='<br><span style="color:#333">Første: '+esc(results[0]?.translations?.find(t=>t.language===2)?.name||results[0]?.id)+'</span>';
+        const img=results.find(e=>e.images?.length)?.images?.[0];
+        if(img?.image){
+          out.innerHTML+='<br><span style="color:#c8ff00">Billede fundet!</span>';
+          out.innerHTML+='<br><img src="'+esc(img.image)+'" style="max-width:100%;border-radius:6px;margin-top:8px"/>';
+        } else {
+          out.innerHTML+='<br><span style="color:#ff6b6b">Ingen billeder på disse øvelser.</span>';
+        }
+      } else {
+        out.innerHTML+='<br><span style="color:#ff6b6b">Ingen match.</span>';
+        out.innerHTML+='<br><span style="color:#333">Råsvar: '+esc(r.text.slice(0,200))+'</span>';
+      }
+    } else {
+      out.innerHTML+='<br><span style="color:#ff6b6b">HTTP '+r.status+': '+esc(r.text.slice(0,200))+'</span>';
+    }
+  }catch(e){
+    out.innerHTML+='<br><span style="color:#ff6b6b">Fejl: '+esc(e.message)+'</span>';
+  }
+}
+window.debugWger=debugWger;
 function showGif(exId,url,name){
   const el=document.getElementById("gif-"+exId);
   if(el)el.innerHTML='<img src="'+url+'" alt="'+esc(name)+'" style="width:100%;max-height:220px;object-fit:cover;border-radius:6px;margin-bottom:12px;display:block"/>';
@@ -823,15 +860,17 @@ async function loadGifForExercise(exId,name){
   // 2. wger.de — free, no API key
   try{
     const term=name.toLowerCase().replace(/\s*\/.*$/,"").replace(/[^a-z0-9 ]/g,"").trim();
-    const r=await xhrGet("https://wger.de/api/v2/exercise/search/?term="+encodeURIComponent(term)+"&language=english&format=json",{});
+    const r=await xhrGet("https://wger.de/api/v2/exerciseinfo/?format=json&language=2&limit=5&name__icontains="+encodeURIComponent(term),{});
     if(r.ok){
       const d=JSON.parse(r.text);
-      const hit=d?.suggestions?.[0]?.data;
-      const imgUrl=hit?.image||hit?.image_thumbnail;
-      if(imgUrl){
-        setDoc(doc(db,"exercises",exId),{gifUrl:imgUrl,name}).catch(()=>{});
-        lc[exId]=imgUrl;localStorage.setItem("loft_gifs",JSON.stringify(lc));
-        showGif(exId,imgUrl,name);return;
+      const results=d?.results||[];
+      for(const ex of results){
+        const img=ex?.images?.find(i=>i.is_main)||ex?.images?.[0];
+        if(img?.image){
+          setDoc(doc(db,"exercises",exId),{gifUrl:img.image,name}).catch(()=>{});
+          lc[exId]=img.image;localStorage.setItem("loft_gifs",JSON.stringify(lc));
+          showGif(exId,img.image,name);return;
+        }
       }
     }
   }catch(e){}
@@ -931,6 +970,12 @@ function renderSettings(){
   h+='<button class="btn-p"'+(trainDays?'':' disabled')+' onclick="saveSplit()">GEM SPLIT</button>';
   // API key section — only visible to app owner
   if(CU&&CU.email==="kenneth.l.thomsen@gmail.com"){
+    h+='<div style="margin-top:32px;padding-top:20px;border-top:1px solid #1a1a1a">'
+      +'<div style="font-size:10px;color:#444;letter-spacing:1.5px;margin-bottom:10px">BILLEDE DEBUG (ADMIN)</div>'
+      +'<input id="dbg-input" class="field" placeholder="Øvelsesnavn (f.eks. seated row)..." style="margin-bottom:8px"/>'
+      +'<button class="btn-g" style="width:auto;padding:9px 18px;font-size:12px" onclick="debugWger()">TEST BILLEDE</button>'
+      +'<div id="dbg-result" style="margin-top:10px;font-size:11px;line-height:1.7"></div>'
+      +'</div>';
   }
   document.getElementById("vsettings").innerHTML=h;
 }

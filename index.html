@@ -828,14 +828,23 @@ function showGif(exId,url,name){
   const el=document.getElementById("gif-"+exId);
   if(el)el.innerHTML='<img src="'+url+'" alt="'+esc(name)+'" style="width:100%;max-height:220px;object-fit:cover;border-radius:6px;margin-bottom:12px;display:block"/>';
 }
+function xhrGet(url,headers){
+  return new Promise((resolve,reject)=>{
+    const x=new XMLHttpRequest();
+    x.open('GET',url);x.timeout=12000;
+    Object.entries(headers).forEach(([k,v])=>x.setRequestHeader(k,v));
+    x.onload=()=>resolve({ok:x.status>=200&&x.status<300,status:x.status,text:x.responseText});
+    x.onerror=()=>reject(new Error('Netværksfejl'));
+    x.ontimeout=()=>reject(new Error('Timeout'));
+    x.send();
+  });
+}
 async function loadGifForExercise(exId,name){
   const el=document.getElementById("gif-"+exId);
   if(!el)return;
-  // 1. localStorage cache
   const lc=JSON.parse(localStorage.getItem("loft_gifs")||"{}");
   if(lc[exId]){showGif(exId,lc[exId],name);return;}
-  el.innerHTML='<div style="font-size:10px;color:#333;text-align:center;padding:12px 0">Henter...</div>';
-  // 2. Firestore shared cache
+  el.innerHTML='<div style="font-size:10px;color:#555;text-align:center;padding:10px 0">Henter...</div>';
   try{
     const snap=await getDoc(doc(db,"exercises",exId));
     if(snap.exists()&&snap.data().gifUrl){
@@ -843,30 +852,35 @@ async function loadGifForExercise(exId,name){
       lc[exId]=url;localStorage.setItem("loft_gifs",JSON.stringify(lc));
       showGif(exId,url,name);return;
     }
-  }catch(e){}
-  // 3. Fetch from ExerciseDB (only if API key set)
-  if(!rapidApiKey){
-    el.innerHTML='<div style="font-size:10px;color:#2a2a2a;text-align:center;padding:6px 0">Ingen animation tilgængelig endnu</div>';
-    return;
-  }
+  }catch(e){console.warn("Firestore GIF read:",e.message);}
+  if(!rapidApiKey){el.innerHTML='';return;}
+  const term=name.toLowerCase().replace(/\s*\/.*$/,"").replace(/[^a-z0-9 ]/g,"").trim();
+  const url="https://exercisedb.p.rapidapi.com/exercises/name/"+encodeURIComponent(term)+"?limit=1";
+  const hdrs={"X-RapidAPI-Key":rapidApiKey,"X-RapidAPI-Host":"exercisedb.p.rapidapi.com"};
+  console.log("GIF fetch:",term);
   try{
-    const term=name.toLowerCase().replace(/\s*\/.*$/,"").replace(/[^a-z0-9 ]/g,"").trim();
-    const res=await fetch("https://exercisedb.p.rapidapi.com/exercises/name/"+encodeURIComponent(term)+"?limit=1",{
-      headers:{"X-RapidAPI-Key":rapidApiKey,"X-RapidAPI-Host":"exercisedb.p.rapidapi.com"}
-    });
-    if(!res.ok){
-      const d=await res.json().catch(()=>({}));
-      el.innerHTML='<div style="font-size:10px;color:#555;padding:4px 0">'+(d.message||"Fejl "+res.status)+'</div>';
+    const r=await xhrGet(url,hdrs);
+    console.log("GIF response:",r.status,r.text.slice(0,120));
+    if(!r.ok){
+      let msg="Fejl "+r.status;
+      try{msg=JSON.parse(r.text).message||msg;}catch(_){}
+      el.innerHTML='<div style="font-size:10px;color:#c8a000;padding:4px 0">'+msg+'</div>';
       return;
     }
-    const data=await res.json();
+    const data=JSON.parse(r.text);
     if(data?.[0]?.gifUrl){
-      const url=data[0].gifUrl;
-      setDoc(doc(db,"exercises",exId),{gifUrl:url,name}).catch(()=>{});
-      lc[exId]=url;localStorage.setItem("loft_gifs",JSON.stringify(lc));
-      showGif(exId,url,name);
-    } else {el.innerHTML='';}
-  }catch(e){el.innerHTML='<div style="font-size:10px;color:#555;padding:4px 0">'+e.message+'</div>';}
+      const gifUrl=data[0].gifUrl;
+      setDoc(doc(db,"exercises",exId),{gifUrl:gifUrl,name}).catch(()=>{});
+      lc[exId]=gifUrl;localStorage.setItem("loft_gifs",JSON.stringify(lc));
+      showGif(exId,gifUrl,name);
+    } else {
+      console.warn("No GIF found for:",term,"response:",data);
+      el.innerHTML='';
+    }
+  }catch(e){
+    console.error("GIF fetch error:",e.message);
+    el.innerHTML='<div style="font-size:10px;color:#c8a000;padding:4px 0">'+e.message+'</div>';
+  }
 }
 
 // ── Settings / Split ─────────────────────────────────────────────────────────

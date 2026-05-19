@@ -187,6 +187,9 @@ getRedirectResult(auth).then(result => {
   if (result?.user) handleNewSocialUser(result.user);
 }).catch(e => showAuthError(ERRS[e.code] || e.message));
 
+// ── Muscle-group map (built from CATALOG at runtime, see below) ───────────────
+let EX_MUSCLE = {};  // populated after CATALOG is defined
+
 // ── Programs ─────────────────────────────────────────────────────────────────
 const PRESETS = {
   "PPL":       {1:"SKUB",3:"TRAEK",5:"BEN"},
@@ -292,6 +295,45 @@ const PROG = {
   }
 };
 
+// Build EX_MUSCLE from CATALOG
+Object.entries(CATALOG).forEach(([grp,exs])=>exs.forEach(ex=>{EX_MUSCLE[ex.id]=grp;}));
+
+// ── Analysis ──────────────────────────────────────────────────────────────────
+const GRP_LABEL={RYG:"Ryg",BRYST:"Bryst",SKULDER:"Skulder",BICEPS:"Biceps",TRICEPS:"Triceps",BEN:"Ben",CORE:"Core"};
+function analyzeWeeklyMuscles(){
+  const covered=new Set();
+  Object.values(userSplit).forEach(type=>{
+    const prog=getProgram(type);
+    if(!prog)return;
+    prog.ex.forEach(ex=>{if(EX_MUSCLE[ex.id])covered.add(EX_MUSCLE[ex.id]);});
+  });
+  const all=Object.keys(CATALOG);
+  return{covered:[...covered],missing:all.filter(g=>!covered.has(g))};
+}
+function generateSuggestions(covered,missing){
+  const s=[];
+  const hasGroup=gs=>gs.some(g=>covered.includes(g));
+  if(missing.includes("BEN"))
+    s.push({lvl:"warn",txt:"Du træner aldrig ben — quadriceps, baglår og glutes får ingen stimulus.",fix:"Tilføj en BEN-dag til dit split, eller inkluder squat/leg press i et eksisterende program."});
+  if(missing.includes("RYG"))
+    s.push({lvl:"warn",txt:"Ingen rygtræning i dit split.",fix:"Tilføj træk-øvelser (Seated Row, Lat Pulldown) for at undgå muskel-ubalance og skulderskader."});
+  if(missing.includes("CORE"))
+    s.push({lvl:"info",txt:"Ingen core-træning fundet i dine programmer.",fix:"Tilføj planke eller russian twist til et af dine eksisterende programmer."});
+  const hasPush=hasGroup(["BRYST","SKULDER","TRICEPS"]);
+  const hasPull=hasGroup(["RYG","BICEPS"]);
+  if(hasPush&&!hasPull)
+    s.push({lvl:"warn",txt:"Du træner kun skub-muskler (bryst/skulder/triceps) — ingen modpart.",fix:"Tilføj ryg- og bicepstræning. Uden træk risikerer du skulderskader og dårlig holdning."});
+  if(!hasPush&&hasPull)
+    s.push({lvl:"info",txt:"Du har primært træk-muskler uden tilsvarende skub.",fix:"Overvej at tilføje bryst- og skulderpres for balance."});
+  // Check recent session volume
+  const recentSets=Object.entries(sessions)
+    .filter(([d])=>{const diff=(new Date()-new Date(d+"T12:00:00"))/(864e5);return diff<=7;})
+    .reduce((a,[,s2])=>a+(s2.exercises||[]).reduce((b,e)=>b+(e.sets||[]).length,0),0);
+  if(Object.keys(sessions).length>0&&recentSets<10)
+    s.push({lvl:"info",txt:`Kun ${recentSets} sæt de seneste 7 dage — under minimumsniveauet for fremgang.`,fix:"Forsøg mindst 10 sæt pr. muskelgruppe pr. uge. Overvej at øge frekvensen eller antallet af sæt."});
+  return s;
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function getType(ds){
   return userSplit[new Date(ds+"T12:00:00").getDay()]||null;
@@ -320,7 +362,7 @@ const pill=t=>'<span class="pill '+(t==="TRAEK"?"pill-t":t==="SKUB"?"pill-s":"pi
 // ── State ─────────────────────────────────────────────────────────────────────
 let CU=null,sessions={},allUsers={},activeDate=tds(new Date()),userSplit={},customPrograms={};
 let curView="today",logEx=[],logNote="",openEx=null,histUid=null,unsubSess=null;
-let activeDaySelect=null,editingProgram=null,builderMode=null,catalogTab="RYG";
+let activeDaySelect=null,editingProgram=null,builderMode=null,catalogTab="RYG",logRating=null;
 
 // ── Window-exposed handlers ───────────────────────────────────────────────────
 window.onReps   = (xi,si,el)=>{logEx[xi].sets[si].reps=el.value.replace(/[^0-9]/g,"");el.value=logEx[xi].sets[si].reps;scheduleAutoSave();};
@@ -328,8 +370,9 @@ window.onKg     = (xi,si,el)=>{logEx[xi].sets[si].weight=el.value.replace(/[^0-9
 window.onNote   = el=>{logNote=el.value;};
 window.addSet   = xi=>{logEx[xi].sets.push(iSet());renderLog();};
 window.rmSet    = (xi,si)=>{logEx[xi].sets.splice(si,1);renderLog();};
-window.saveLog  = saveLog;
-window.moveEx   = moveEx;
+window.saveLog    = saveLog;
+window.moveEx     = moveEx;
+window.setLogRating = r=>{logRating=r;renderLog();};
 window.toggleEx = id=>{openEx=openEx===id?null:id;renderProgram();};
 window.setDate  = ds=>{activeDate=ds;if(curView==="program")renderProgram();else if(curView==="log"){initLog();renderLog();}};
 window.showView = showView;
@@ -505,7 +548,33 @@ function renderToday(){
     h+='<div class="sbox"><div style="font-family:\'Bebas Neue\';font-size:32px;color:#c8ff00;line-height:1">'+v+'</div><div style="font-size:10px;color:#444;letter-spacing:1.5px;margin-top:3px">'+l.toUpperCase()+'</div></div>';
   });
   h+='</div></div>';
-  if(isTrain)h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><button class="btn-g" onclick="activeDate=\''+today+'\';showView(\'program\')">SE PROGRAM →</button><button class="btn-p" onclick="activeDate=\''+today+'\';showView(\'log\')">LOG TRÆNING →</button></div>';
+  if(isTrain)h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:24px"><button class="btn-g" onclick="activeDate=\''+today+'\';showView(\'program\')">SE PROGRAM →</button><button class="btn-p" onclick="activeDate=\''+today+'\';showView(\'log\')">LOG TRÆNING →</button></div>';
+  // ── Analyse ──
+  if(Object.keys(userSplit).length){
+    const {covered,missing}=analyzeWeeklyMuscles();
+    const suggestions=generateSuggestions(covered,missing);
+    const hasWarnings=missing.length>0||suggestions.some(s=>s.lvl==="warn");
+    h+='<div style="margin-bottom:24px"><div style="font-size:10px;color:'+(hasWarnings?"#ff8080":"#444")+';letter-spacing:2px;margin-bottom:12px">PROGRAM ANALYSE</div>';
+    // Coverage grid
+    h+='<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:14px">';
+    Object.keys(CATALOG).forEach(g=>{
+      const ok=covered.includes(g);
+      h+='<div style="padding:4px 10px;border-radius:20px;font-size:11px;letter-spacing:0.5px;border:1px solid '+(ok?"#c8ff0030":"#ff444440")+';color:'+(ok?"#c8ff00":"#ff6b6b")+';background:'+(ok?"#1e2a00":"#1a0808")+'">'+(ok?"✓":"✗")+" "+GRP_LABEL[g]+'</div>';
+    });
+    h+='</div>';
+    // Suggestions
+    if(suggestions.length){
+      suggestions.forEach(s=>{
+        const isWarn=s.lvl==="warn";
+        h+='<div style="background:'+(isWarn?"#1a0808":"#0e0e0e")+';border:1px solid '+(isWarn?"#ff444430":"#1e1e1e")+';border-radius:8px;padding:12px 14px;margin-bottom:8px">';
+        h+='<div style="font-size:12px;color:'+(isWarn?"#ff8080":"#777")+';margin-bottom:5px">'+esc(s.txt)+'</div>';
+        h+='<div style="font-size:11px;color:#555;line-height:1.6">→ '+esc(s.fix)+'</div></div>';
+      });
+    } else {
+      h+='<div style="font-size:12px;color:#2a5a2a;text-align:center;padding:10px 0">Dit program dækker alle muskelgrupper godt.</div>';
+    }
+    h+='</div>';
+  }
   document.getElementById("vtoday").innerHTML=h;
 }
 
@@ -528,6 +597,7 @@ function renderProgram(){
 
 function initLog(){
   const type=getType(activeDate);
+  logRating=null;
   if(!type){logEx=[];logNote="";return;}
   const existing=sessions[activeDate];
   if(existing){
@@ -586,8 +656,14 @@ function renderLog(){
     });
     h+='<button class="asb" onclick="addSet('+xi+')">+ SÆT</button></div>';
   });
-  h+='<textarea class="field" placeholder="Note til træningen (valgfrit)..." rows="2" style="resize:vertical;margin-bottom:10px;color:#777" oninput="onNote(this)">'+esc(logNote)+'</textarea>'
-    +'<button class="btn-p" id="savebtn" onclick="saveLog()">GEM TRÆNING</button>';
+  h+='<textarea class="field" placeholder="Note til træningen (valgfrit)..." rows="2" style="resize:vertical;margin-bottom:16px;color:#777" oninput="onNote(this)">'+esc(logNote)+'</textarea>';
+  h+='<div style="margin-bottom:14px"><div style="font-size:10px;color:#444;letter-spacing:1.5px;margin-bottom:10px">VURDERING AF TRÆNINGEN</div><div style="display:flex;gap:8px">';
+  [["god","GOD","#c8ff00","#1e2a00"],["ok","OK","#aaa","#1a1a1a"],["darlig","DÅRLIG","#ff6b6b","#2a0808"]].forEach(([v,l,c,bg])=>{
+    const sel=logRating===v;
+    h+='<button onclick="setLogRating(\''+v+'\')" style="flex:1;padding:11px 4px;border:1px solid '+(sel?c+"80":"#1a1a1a")+';border-radius:6px;background:'+(sel?bg:"#111")+';color:'+(sel?c:"#333")+';font-family:inherit;font-size:12px;letter-spacing:1.5px;cursor:pointer">'+l+'</button>';
+  });
+  h+='</div></div>';
+  h+='<button class="btn-p" id="savebtn" onclick="saveLog()">GEM TRÆNING</button>';
   document.getElementById("vlog").innerHTML=h;
 }
 
@@ -601,7 +677,7 @@ async function saveLog(silent=false){
   if(!type||!CU)return;
   const hasData=logEx.some(ex=>ex.sets.some(s=>s.reps||s.weight));
   if(silent&&!hasData)return;
-  const data={date:activeDate,type,exercises:logEx,note:logNote,savedAt:new Date().toISOString(),userName:CU.displayName||CU.email.split("@")[0]};
+  const data={date:activeDate,type,exercises:logEx,note:logNote,rating:logRating,savedAt:new Date().toISOString(),userName:CU.displayName||CU.email.split("@")[0]};
   if(!silent&&btn){btn.disabled=true;btn.textContent="…";}
   const lbl=document.getElementById("autosavelbl");
   if(lbl)lbl.textContent="Gemmer…";
@@ -609,6 +685,7 @@ async function saveLog(silent=false){
   if(lbl)lbl.textContent="Gemt ✓";
   setTimeout(()=>{const l=document.getElementById("autosavelbl");if(l)l.textContent="";},2000);
   if(!silent&&btn){btn.textContent="Gemt ✓";setTimeout(()=>{if(btn){btn.disabled=false;btn.textContent="GEM TRÆNING";}},2000);}
+  if(!silent&&logRating==="darlig")setTimeout(()=>showView("today"),1200);
 }
 function moveEx(xi,dir){
   const ni=xi+dir;

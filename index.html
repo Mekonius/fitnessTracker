@@ -375,7 +375,7 @@ async function handleNewSocialUser(user) {
 }
 
 // ── Email Auth ────────────────────────────────────────────────────────────────
-const ERRS={"auth/invalid-email":"Ugyldig e-mailadresse.","auth/user-not-found":"Ingen bruger med den e-mail.","auth/wrong-password":"Forkert kodeord.","auth/email-already-in-use":"E-mailen er allerede i brug.","auth/weak-password":"Kodeordet skal være mindst 6 tegn.","auth/invalid-credential":"Forkert e-mail eller kodeord."};
+const ERRS={"auth/invalid-email":"Ugyldig e-mailadresse.","auth/user-not-found":"Ingen bruger med den e-mail.","auth/wrong-password":"Forkert kodeord.","auth/email-already-in-use":"E-mailen er allerede i brug.","auth/weak-password":"Kodeordet skal være mindst 6 tegn.","auth/invalid-credential":"Forkert e-mail eller kodeord.","auth/operation-not-allowed":"Email/kodeord-login er ikke slået til i Firebase.","auth/too-many-requests":"For mange forsøg. Prøv igen om lidt."};
 let authMode="login";
 
 function showAuthError(msg){const e=document.getElementById("aerr");e.textContent=msg;e.style.display="block";}
@@ -402,12 +402,12 @@ async function doAuth(){
       if(!name){showAuthError("Skriv dit navn.");btn.disabled=false;btn.textContent="OPRET KONTO";return;}
       const c=await createUserWithEmailAndPassword(auth,email,pw);
       await updateProfile(c.user,{displayName:name});
-      await handleNewSocialUser(c.user);
+      handleNewSocialUser(c.user).catch(()=>{}); // non-blocking — auth already succeeded
     } else {
       await signInWithEmailAndPassword(auth,email,pw);
     }
   } catch(e){
-    showAuthError(ERRS[e.code]||"Noget gik galt. Prøv igen.");
+    showAuthError(ERRS[e.code]||e.message||"Noget gik galt. Prøv igen.");
     btn.disabled=false;btn.textContent=authMode==="login"?"LOG IND":"OPRET KONTO";
   }
 }

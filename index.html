@@ -856,13 +856,13 @@ async function loadGifForExercise(exId,name){
   if(!el){console.log("GIF["+exId+"]: element not found");return;}
   console.log("GIF["+exId+"] start, name:",name);
   const lc=JSON.parse(localStorage.getItem("loft_gifs")||"{}");
-  if(lc[exId]){console.log("GIF["+exId+"]: localStorage hit");showGif(exId,lc[exId],name);return;}
+  if(lc[exId]&&!lc[exId].includes("wger.de")){console.log("GIF["+exId+"]: localStorage hit");showGif(exId,lc[exId],name);return;}
   el.innerHTML='<div style="font-size:10px;color:#444;text-align:center;padding:10px 0">Henter...</div>';
   // 1. Firestore shared cache
   try{
     console.log("GIF["+exId+"]: checking Firestore...");
     const snap=await getDoc(doc(db,"exercises",exId));
-    if(snap.exists()&&snap.data().gifUrl){
+    if(snap.exists()&&snap.data().gifUrl&&!snap.data().gifUrl.includes("wger.de")){
       console.log("GIF["+exId+"]: Firestore hit:",snap.data().gifUrl);
       const url=snap.data().gifUrl;
       lc[exId]=url;localStorage.setItem("loft_gifs",JSON.stringify(lc));

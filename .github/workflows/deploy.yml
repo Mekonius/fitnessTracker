@@ -1,14 +1,11 @@
 name: Deploy
-
 on:
   push:
     branches: [main]
-
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
-
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -18,11 +15,32 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Pak zip ud (uanset navn) og commit
+        run: |
+          ZIP=$(ls *.zip 2>/dev/null | head -n 1)
+          if [ -n "$ZIP" ]; then
+            echo "Fandt zip: $ZIP - pakker ud..."
+            unzip -o "$ZIP"
+            rm -f "$ZIP"
+            git config user.name "github-actions"
+            git config user.email "actions@github.com"
+            git add -A
+            git commit -m "Udpak og deploy $ZIP" || echo "Intet at committe"
+            git push
+          else
+            echo "Ingen zip - deployer eksisterende filer"
+          fi
+
       - uses: actions/configure-pages@v4
+
+      - name: Saml site-mappe (uden git/zip)
+        run: |
+          mkdir -p _site
+          rsync -a --exclude='.git' --exclude='.github' --exclude='_site' --exclude='*.zip' ./ _site/
 
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: _site
 
       - id: deployment
         uses: actions/deploy-pages@v4

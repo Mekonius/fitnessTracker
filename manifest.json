@@ -1,7 +1,7 @@
 {
   "name": "LØFT Træningstracker",
   "short_name": "LØFT",
-  "description": "Track din træning med push/pull split",
+  "description": "Track din træning med push/pull/ben split",
   "start_url": ".",
   "scope": ".",
   "display": "standalone",

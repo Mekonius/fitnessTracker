@@ -51,6 +51,15 @@ input:focus,textarea:focus{border-color:#c8ff00!important}
 .asb{width:100%;background:none;border:1px dashed #1e1e1e;border-radius:4px;color:#444;cursor:pointer;padding:5px;font-size:11px;letter-spacing:1px;font-family:inherit;margin-top:4px}
 .asb:hover{border-color:#c8ff0055;color:#c8ff00}
 .avatar{width:28px;height:28px;border-radius:50%;object-fit:cover}
+.profile-card{background:#141414;border:1px solid #222;border-radius:12px;padding:28px 20px;display:flex;flex-direction:column;align-items:center;gap:12px;cursor:pointer;transition:all .2s;position:relative}
+.profile-card:hover{border-color:#c8ff00;background:#1a1a1a}
+.profile-avatar{width:64px;height:64px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:26px;font-family:"Bebas Neue",sans-serif;letter-spacing:1px;flex-shrink:0}
+.profile-name{font-size:14px;color:#e0dcd4;letter-spacing:1px}
+.profile-delete{position:absolute;top:8px;right:8px;background:none;border:none;color:#333;cursor:pointer;font-size:16px;padding:4px;line-height:1}
+.profile-delete:hover{color:#ff4444}
+.add-profile-card{background:#0e0e0e;border:1px dashed #2a2a2a;border-radius:12px;padding:28px 20px;display:flex;flex-direction:column;align-items:center;gap:12px;cursor:pointer;transition:all .2s}
+.add-profile-card:hover{border-color:#c8ff0055;background:#111}
+.color-dot{width:28px;height:28px;border-radius:50%;cursor:pointer;outline-offset:2px}
 </style>
 </head>
 <body>
@@ -115,13 +124,44 @@ input:focus,textarea:focus{border-color:#c8ff00!important}
   </div>
 </div>
 
+<!-- PROFILVÆLGER -->
+<div id="sprofile" style="display:none">
+  <div style="min-height:100vh;padding:40px 20px;max-width:480px;margin:0 auto">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:32px">
+      <div>
+        <div style="font-family:'Bebas Neue';font-size:40px;letter-spacing:3px;color:#c8ff00;line-height:1">LØFT</div>
+        <div style="font-size:11px;color:#555;margin-top:4px">Hvem træner i dag?</div>
+      </div>
+      <button onclick="doSignOut()" style="background:none;border:1px solid #222;border-radius:4px;color:#444;cursor:pointer;font-size:10px;padding:4px 8px;font-family:inherit">UD</button>
+    </div>
+    <div id="profile-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:12px"></div>
+  </div>
+</div>
+
+<!-- NY PROFIL MODAL -->
+<div id="smodal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:200;align-items:center;justify-content:center;padding:20px">
+  <div style="background:#141414;border:1px solid #2a2a2a;border-radius:12px;padding:24px;width:100%;max-width:320px">
+    <div style="font-family:'Bebas Neue';font-size:20px;letter-spacing:2px;color:#c8ff00;margin-bottom:20px">NY PROFIL</div>
+    <input id="pname" class="field" placeholder="Navn (f.eks. Maria)" style="margin-bottom:16px"/>
+    <div style="font-size:10px;color:#555;letter-spacing:1px;margin-bottom:10px">VÆLG FARVE</div>
+    <div id="color-picker" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <button class="btn-g" onclick="closeModal()" style="padding:10px;font-size:13px">ANNULLER</button>
+      <button class="btn-p" onclick="createProfile()" style="padding:10px;font-size:15px">OPRET</button>
+    </div>
+  </div>
+</div>
+
 <div id="sapp" style="display:none">
   <div style="padding:16px 20px 0;border-bottom:1px solid #1a1a1a">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
       <div style="font-family:'Bebas Neue';font-size:34px;letter-spacing:3px;color:#c8ff00;line-height:1">LØFT</div>
       <div style="display:flex;align-items:center;gap:8px">
-        <img id="havatar" class="avatar" style="display:none" src="" alt=""/>
-        <span id="hname" style="font-size:11px;color:#777"></span>
+        <button onclick="backToProfiles()" id="profile-badge" style="display:flex;align-items:center;gap:7px;background:#141414;border:1px solid #222;border-radius:20px;padding:5px 12px 5px 6px;cursor:pointer">
+          <div id="pbadge-avatar" style="width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-family:'Bebas Neue'"></div>
+          <span id="pbadge-name" style="font-size:11px;color:#888"></span>
+          <span style="font-size:11px;color:#444">↺</span>
+        </button>
         <button onclick="doSignOut()" style="background:none;border:1px solid #222;border-radius:4px;color:#444;cursor:pointer;font-size:10px;padding:4px 8px;font-family:inherit">UD</button>
       </div>
     </div>
@@ -363,16 +403,24 @@ function upcoming(n){
 const pill=t=>'<span class="pill '+(t==="TRAEK"?"pill-t":t==="SKUB"?"pill-s":"pill-b")+'">'+(t==="TRAEK"?"TRÆK":t==="SKUB"?"SKUB":"BEN")+'</span>';
 
 // ── State ─────────────────────────────────────────────────────────────────────
-let CU=null,sessions={},allUsers={},activeDate=tds(new Date()),userSplit={},customPrograms={};
-let curView="today",logEx=[],logNote="",openEx=null,histUid=null,unsubSess=null;
+let CU=null,sessions={},activeDate=tds(new Date()),userSplit={},customPrograms={};
+let curView="today",logEx=[],logNote="",openEx=null,unsubSess=null;
 let activeDaySelect=null,editingProgram=null,builderMode=null,catalogTab="RYG",logRating=null;
 let rapidApiKey=localStorage.getItem("loft_api_key")||"";
+let profiles={},activeProfile=null,histProfileId=null,selectedColor=null;
+const COLORS=["#c8ff00","#5bc8ff","#ff8c5b","#c85bff","#ff5b8c","#5bffc8","#ffd75b","#ff5b5b"];
+const REP_SCHEMES=[[6,6,6],[8,8,8],[10,10,10],[12,10,8],[15,12,10],[5,5,5,5]];
 
 // ── Window-exposed handlers ───────────────────────────────────────────────────
 window.onReps   = (xi,si,el)=>{logEx[xi].sets[si].reps=el.value.replace(/[^0-9]/g,"");el.value=logEx[xi].sets[si].reps;scheduleAutoSave();};
 window.onKg     = (xi,si,el)=>{logEx[xi].sets[si].weight=el.value.replace(/[^0-9]/g,"");el.value=logEx[xi].sets[si].weight;scheduleAutoSave();};
 window.onNote   = el=>{logNote=el.value;};
 window.addSet   = xi=>{logEx[xi].sets.push(iSet());renderLog();};
+window.applyScheme = (xi,reps)=>{
+  const w=logEx[xi].sets.map(s=>s.weight);
+  logEx[xi].sets=reps.map((r,i)=>({reps:String(r),weight:w[i]||""}));
+  renderLog();scheduleAutoSave();
+};
 window.rmSet    = (xi,si)=>{logEx[xi].sets.splice(si,1);renderLog();};
 window.saveLog    = saveLog;
 window.setLogRating = r=>{logRating=r;renderLog();};
@@ -383,7 +431,7 @@ window.doAuth   = doAuth;
 window.doGoogle = doGoogle;
 window.doSignOut= ()=>signOut(auth);
 window.setMode  = setMode;
-window.switchHist=uid=>{histUid=uid;renderHistory();};
+window.switchHist=id=>{histProfileId=id;renderHistory();};
 window.applyPreset=applyPreset;
 window.saveSplit=saveSplit;
 window.selectDay=selectDay;
@@ -397,6 +445,13 @@ window.addCatalogEx=addCatalogEx;
 window.removeBuilderEx=removeBuilderEx;
 window.addCustomEx=addCustomEx;
 window.saveCustomProgram=saveCustomProgram;
+window.selectProfile=selectProfile;
+window.deleteProfile=deleteProfile;
+window.createProfile=createProfile;
+window.openModal=openModal;
+window.closeModal=()=>{document.getElementById("smodal").style.display="none";};
+window.backToProfiles=backToProfiles;
+window.selectColor=c=>{selectedColor=c;document.querySelectorAll(".color-dot").forEach(d=>{d.style.outline=d.dataset.color===c?"2px solid #fff":"none";});};
 
 // ── Google Sign-In ────────────────────────────────────────────────────────────
 async function doGoogle(){
@@ -457,29 +512,130 @@ async function doAuth(){
 onAuthStateChanged(auth, async user=>{
   document.getElementById("sload").style.display="none";
   if(user){
-    CU=user;histUid=user.uid;
-    document.getElementById("sauth").style.display="none";
-    document.getElementById("sapp").style.display="block";
-    document.getElementById("hname").textContent=user.displayName||user.email.split("@")[0];
-    if(user.photoURL){const av=document.getElementById("havatar");av.src=user.photoURL;av.style.display="block";}
-    updateHdr();startListen();loadUsers();maybeShowWelcome();await loadSettings();
+    CU=user;
+    maybeShowWelcome();
+    await loadProfiles();
+    await ensureDefaultProfile();
+    showScreen("sprofile");
+    renderProfileScreen();
   } else {
-    CU=null;
+    CU=null;activeProfile=null;
     if(unsubSess){unsubSess();unsubSess=null;}
-    document.getElementById("sapp").style.display="none";
-    document.getElementById("sauth").style.display="block";
+    showScreen("sauth");
   }
 });
 
-function startListen(){
-  if(unsubSess)unsubSess();
-  unsubSess=onSnapshot(collection(db,"users",CU.uid,"sessions"),snap=>{
-    sessions={};snap.forEach(d=>{sessions[d.id]=d.data();});
-    if(curView==="today")renderToday();
-    if(curView==="history"&&histUid===CU.uid)renderHistContent(sessions);
+// ── Screen toggling ───────────────────────────────────────────────────────────
+function showScreen(id){
+  ["sload","sauth","sprofile","sapp"].forEach(s=>{
+    const el=document.getElementById(s);
+    if(el)el.style.display=s===id?"block":"none";
   });
 }
-async function loadUsers(){try{const snap=await getDocs(collection(db,"users"));allUsers={};snap.forEach(d=>{allUsers[d.id]=d.data();});}catch(e){}}
+
+// ── Profiles ──────────────────────────────────────────────────────────────────
+async function loadProfiles(){
+  const snap=await getDocs(collection(db,"users",CU.uid,"profiles"));
+  profiles={};
+  snap.forEach(d=>{profiles[d.id]={id:d.id,...d.data()};});
+}
+
+async function ensureDefaultProfile(){
+  if(Object.keys(profiles).length>0)return;
+  const name=CU.displayName||CU.email.split("@")[0];
+  const id="p_"+Date.now();
+  const profile={name,color:COLORS[0],createdAt:new Date().toISOString()};
+  await setDoc(doc(db,"users",CU.uid,"profiles",id),profile);
+  profiles[id]={id,...profile};
+  // Migrate eksisterende sessioner (fra før profiler) ind i standardprofilen
+  try{
+    const oldSnap=await getDocs(collection(db,"users",CU.uid,"sessions"));
+    const migrations=[];
+    oldSnap.forEach(d=>{migrations.push(setDoc(doc(db,"users",CU.uid,"profiles",id,"sessions",d.id),d.data()));});
+    if(migrations.length)await Promise.all(migrations);
+  }catch(e){}
+}
+
+function renderProfileScreen(){
+  const grid=document.getElementById("profile-grid");
+  if(!grid)return;
+  const multi=Object.keys(profiles).length>1;
+  let html="";
+  Object.values(profiles).sort((a,b)=>(a.createdAt>b.createdAt?1:-1)).forEach(p=>{
+    html+='<div class="profile-card" onclick="selectProfile(\''+p.id+'\')">'
+      +(multi?'<button class="profile-delete" onclick="event.stopPropagation();deleteProfile(\''+p.id+'\')" title="Slet">×</button>':'')
+      +'<div class="profile-avatar" style="background:'+p.color+'20;color:'+p.color+'">'+esc(p.name.charAt(0).toUpperCase())+'</div>'
+      +'<div class="profile-name">'+esc(p.name)+'</div>'
+      +'</div>';
+  });
+  html+='<div class="add-profile-card" onclick="openModal()">'
+    +'<div style="width:64px;height:64px;border-radius:50%;background:#1a1a1a;display:flex;align-items:center;justify-content:center;font-size:28px;color:#444">+</div>'
+    +'<div style="font-size:12px;color:#555;letter-spacing:1px">Tilføj profil</div>'
+    +'</div>';
+  grid.innerHTML=html;
+}
+
+function openModal(){
+  selectedColor=COLORS[0];
+  document.getElementById("pname").value="";
+  const cp=document.getElementById("color-picker");
+  cp.innerHTML=COLORS.map(c=>'<div class="color-dot" data-color="'+c+'" onclick="selectColor(\''+c+'\')" style="background:'+c+';outline:'+(c===selectedColor?"2px solid #fff":"none")+'"></div>').join("");
+  document.getElementById("smodal").style.display="flex";
+  setTimeout(()=>document.getElementById("pname").focus(),50);
+}
+
+async function createProfile(){
+  const name=document.getElementById("pname").value.trim();
+  if(!name)return;
+  const id="p_"+Date.now();
+  const profile={name,color:selectedColor||COLORS[0],createdAt:new Date().toISOString()};
+  await setDoc(doc(db,"users",CU.uid,"profiles",id),profile);
+  profiles[id]={id,...profile};
+  document.getElementById("smodal").style.display="none";
+  renderProfileScreen();
+}
+
+async function deleteProfile(id){
+  if(Object.keys(profiles).length<=1){alert("Du skal have mindst én profil.");return;}
+  if(!confirm("Slet profil og al dens træningsdata?"))return;
+  try{
+    const snap=await getDocs(collection(db,"users",CU.uid,"profiles",id,"sessions"));
+    await Promise.all(snap.docs.map(d=>deleteDoc(d.ref)));
+  }catch(e){}
+  await deleteDoc(doc(db,"users",CU.uid,"profiles",id));
+  delete profiles[id];
+  renderProfileScreen();
+}
+
+async function selectProfile(id){
+  activeProfile=profiles[id];
+  histProfileId=id;
+  const av=document.getElementById("pbadge-avatar");
+  av.style.background=activeProfile.color+"20";
+  av.style.color=activeProfile.color;
+  av.textContent=activeProfile.name.charAt(0).toUpperCase();
+  document.getElementById("pbadge-name").textContent=activeProfile.name;
+  showScreen("sapp");
+  startListen();
+  updateHdr();
+  await loadSettings();
+}
+
+function backToProfiles(){
+  activeProfile=null;
+  if(unsubSess){unsubSess();unsubSess=null;}
+  showScreen("sprofile");
+  renderProfileScreen();
+}
+
+function startListen(){
+  if(unsubSess)unsubSess();
+  unsubSess=onSnapshot(collection(db,"users",CU.uid,"profiles",activeProfile.id,"sessions"),snap=>{
+    sessions={};snap.forEach(d=>{sessions[d.id]=d.data();});
+    if(curView==="today")renderToday();
+    if(curView==="history"&&histProfileId===activeProfile.id)renderHistContent(sessions);
+  });
+}
 function updateHdr(){
   const today=tds(new Date()),type=getType(today);
   document.getElementById("hdate").innerHTML=cap(fmtDate(today))+" — "
@@ -644,8 +800,16 @@ function renderLog(){
       +(def.muscles?'<div style="font-size:10px;color:'+p.color+';opacity:.7;margin-top:2px">'+esc(def.muscles)+'</div>':"")
       +(def.reps?'<div style="font-size:10px;color:#333;margin-top:2px">Mål: '+def.sets+' sæt · '+esc(def.reps)+' · '+def.rest+'</div>':"")
       +'</div>'
-      +'</div>'
-      +'<div style="display:grid;grid-template-columns:28px 1fr 1fr 28px;gap:5px;margin-bottom:6px">'
+      +'</div>';
+    if(!def.isTime){
+      h+='<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px">';
+      h+='<span style="font-size:9px;color:#333;letter-spacing:1px;align-self:center;margin-right:2px">SKEMA</span>';
+      REP_SCHEMES.forEach(sc=>{
+        h+='<button onclick="applyScheme('+xi+',['+sc.join(',')+'])" style="padding:3px 9px;border:1px solid #1e1e1e;border-radius:14px;background:#0a0a0a;color:#666;font-family:inherit;font-size:10px;letter-spacing:.5px;cursor:pointer">'+sc.join('·')+'</button>';
+      });
+      h+='</div>';
+    }
+    h+='<div style="display:grid;grid-template-columns:28px 1fr 1fr 28px;gap:5px;margin-bottom:6px">'
       +'<span></span><span style="font-size:10px;color:#444;text-align:center;letter-spacing:1px">REPS</span>'
       +'<span style="font-size:10px;color:#444;text-align:center;letter-spacing:1px">'+(def.isTime?"SEK":"KG")+'</span><span></span></div>';
     ex.sets.forEach((set,si)=>{
@@ -763,14 +927,14 @@ function scheduleAutoSave(){
 }
 async function saveLog(silent=false){
   const type=getType(activeDate),btn=document.getElementById("savebtn");
-  if(!type||!CU)return;
+  if(!type||!CU||!activeProfile)return;
   const hasData=logEx.some(ex=>ex.sets.some(s=>s.reps||s.weight));
   if(silent&&!hasData)return;
-  const data={date:activeDate,type,exercises:logEx,note:logNote,rating:logRating,savedAt:new Date().toISOString(),userName:CU.displayName||CU.email.split("@")[0]};
+  const data={date:activeDate,type,exercises:logEx,note:logNote,rating:logRating,savedAt:new Date().toISOString(),profileName:activeProfile.name};
   if(!silent&&btn){btn.disabled=true;btn.textContent="…";}
   const lbl=document.getElementById("autosavelbl");
   if(lbl)lbl.textContent="Gemmer…";
-  await setDoc(doc(db,"users",CU.uid,"sessions",activeDate),data);
+  await setDoc(doc(db,"users",CU.uid,"profiles",activeProfile.id,"sessions",activeDate),data);
   if(lbl)lbl.textContent="Gemt ✓";
   setTimeout(()=>{const l=document.getElementById("autosavelbl");if(l)l.textContent="";},2000);
   if(!silent&&btn){btn.textContent="Gemt ✓";setTimeout(()=>{if(btn){btn.disabled=false;btn.textContent="GEM TRÆNING";}},2000);}
@@ -778,16 +942,26 @@ async function saveLog(silent=false){
 }
 
 function renderHistory(){
-  const uids=Object.keys(allUsers);
+  const ids=Object.keys(profiles);
   let h="";
-  if(uids.length>1){h='<div style="margin-bottom:20px">';uids.forEach(uid=>{const act=uid===histUid,name=uid===CU.uid?"Mine":(allUsers[uid].name||allUsers[uid].email);h+='<span class="chip'+(act?" active":"")+'" onclick="switchHist(\''+uid+'\')">'+esc(name)+'</span>';});h+='</div>';}
+  if(ids.length>1){
+    h='<div style="margin-bottom:20px">';
+    ids.forEach(id=>{
+      const act=id===histProfileId,p=profiles[id];
+      h+='<span class="chip'+(act?" active":"")+'" onclick="switchHist(\''+id+'\')">'+esc(p.name)+'</span>';
+    });
+    h+='</div>';
+  }
   h+='<div id="hcontent"></div>';
   document.getElementById("vhistory").innerHTML=h;
   loadHist();
 }
 async function loadHist(){
   let data=sessions;
-  if(histUid!==CU.uid){const snap=await getDocs(collection(db,"users",histUid,"sessions"));data={};snap.forEach(d=>{data[d.id]=d.data();});}
+  if(histProfileId!==activeProfile.id){
+    const snap=await getDocs(collection(db,"users",CU.uid,"profiles",histProfileId,"sessions"));
+    data={};snap.forEach(d=>{data[d.id]=d.data();});
+  }
   renderHistContent(data);
 }
 // ── Exercise images ───────────────────────────────────────────────────────────

@@ -556,7 +556,7 @@ const pill=t=>'<span class="pill '+(t==="TRAEK"?"pill-t":t==="SKUB"?"pill-s":"pi
 let CU=null,sessions={},activeDate=tds(new Date()),userSplit={},customPrograms={};
 let curView="today",logEx=[],logNote="",openEx=null,unsubSess=null;
 let activeDaySelect=null,editingProgram=null,builderMode=null,catalogTab="RYG",logRating=null,logInfoEx=null,progEx=null;
-let rapidApiKey=localStorage.getItem("loft_api_key")||"";
+let wizStep=null,wizGoal=null,wizDays=null,userGoal=null,goalGuideOpen=false;
 let profiles={},activeProfile=null,histProfileId=null,selectedColor=null;
 const COLORS=["#c8ff00","#5bc8ff","#ff8c5b","#c85bff","#ff5b8c","#5bffc8","#ffd75b","#ff5b5b"];
 const REP_SCHEMES=[[6,6,6],[8,8,8],[10,10,10],[12,10,8],[15,12,10],[5,5,5,5]];
@@ -1239,16 +1239,6 @@ async function loadHist(){
   renderHistContent(data);
 }
 // ── Exercise images ───────────────────────────────────────────────────────────
-function saveApiKey(){
-  const key=(document.getElementById("apikey-input")?.value||"").trim();
-  rapidApiKey=key;localStorage.setItem("loft_api_key",key);
-  localStorage.removeItem("loft_gifs");renderSettings();
-}
-window.saveApiKey=saveApiKey;
-window.dbgImgErr=function(img){
-  const el=document.getElementById("dbg-result");
-  if(el)el.innerHTML+='<br><span style="color:#ff6b6b">Billede fejlede: '+img.src+'</span>';
-};
 async function debugWger(){
   const name=(document.getElementById("dbg-input")?.value||"").trim();
   const out=document.getElementById("dbg-result");
@@ -1414,6 +1404,90 @@ async function loadGifForExercise(exId,name,elId){
   el.innerHTML='';
 }
 
+// ── Mål-wizard ────────────────────────────────────────────────────────────────
+const GOALS={
+  weight:{label:"Vægttab",emoji:"🔥",tagline:"Tab fedt — behold dine muskler",recDays:[2,3],
+    guide:[
+      "Vægttab styres af kalorieunderskud — træningen sikrer at du taber fedt, ikke muskler. Sigt efter 300–500 kcal under dit vedligehold.",
+      "Styrketræn 2–4 dage/uge med fokus på de store øvelser (squat, pres, træk) — de forbrænder mest og bevarer mest muskel.",
+      "Hold pauserne korte (45–60s) — højere puls og større forbrænding pr. session.",
+      "Protein: 1,8–2,4 g pr. kg kropsvægt beskytter muskelmassen, når du er i underskud.",
+      "Gå 8–10.000 skridt om dagen — hverdagsaktivitet er den mest undervurderede faktor for vægttab."
+    ]},
+  bulk:{label:"Muskelopbygning",emoji:"💪",tagline:"Byg maksimal muskelmasse",recDays:[3,4],
+    guide:[
+      "Muskelvækst kræver et lille kalorieoverskud (200–300 kcal/dag) og progressiv overbelastning — løft lidt mere over tid.",
+      "Ram 10–20 sæt pr. muskelgruppe pr. uge fordelt på mindst 2 dage (Schoenfeld 2016/2017). Program-analysen i Overblik holder øje for dig.",
+      "Træn mest i 6–12 reps. Når du rammer toppen af rep-målet på alle sæt, så øg vægten — appen foreslår det automatisk i loggen.",
+      "Protein: 1,6–2,2 g pr. kg kropsvægt fordelt over dagen.",
+      "Hvil 60–120s mellem sæt og sov 7–9 timer — det er der, musklerne faktisk bygges."
+    ]},
+  athletic:{label:"Atletisk krop",emoji:"⚡",tagline:"Stærk, veltrænet og funktionel",recDays:[2,3],
+    guide:[
+      "Atletisk = moderat muskelmasse + lav fedtprocent. Træn tungt, spis omkring dit vedligehold, og vær tålmodig.",
+      "Byg programmet omkring compound-øvelser (squat, pres, træk) og suppler med core-arbejde.",
+      "8–12 reps på det meste. Tilføj gerne 1–2 dage med kondition eller sport ved siden af styrketræningen.",
+      "Protein: 1,6–2 g pr. kg kropsvægt. Kalorier omkring vedligehold — kropskompositionen ændrer sig langsomt, men sikkert.",
+      "Konsistens slår intensitet: 3 gode dage hver uge i et år slår 6 perfekte dage i en måned."
+    ]}
+};
+function wizSplit(days){
+  if(days===2)return{1:"SKUB",4:"TRAEK"};
+  if(days===3)return{1:"SKUB",3:"TRAEK",5:"BEN"};
+  return{1:"SKUB",2:"TRAEK",4:"BEN",6:"TRAEK"};
+}
+window.startWizard=()=>{wizStep=1;wizGoal=null;wizDays=null;renderSettings();};
+window.wizClose=()=>{wizStep=null;renderSettings();};
+window.wizBack=()=>{wizStep=Math.max(1,wizStep-1);renderSettings();};
+window.wizSetGoal=g=>{wizGoal=g;wizStep=2;renderSettings();};
+window.wizSetDays=d=>{wizDays=d;wizStep=3;renderSettings();};
+window.wizApply=()=>{userSplit=wizSplit(wizDays);userGoal=wizGoal;wizStep=null;saveSplit();};
+window.toggleGoalGuide=()=>{goalGuideOpen=!goalGuideOpen;renderSettings();};
+function renderWizard(){
+  const DNF=["Søndag","Mandag","Tirsdag","Onsdag","Torsdag","Fredag","Lørdag"];
+  const TL={TRAEK:"Træk",SKUB:"Skub",BEN:"Ben"};
+  let h='<div style="background:#0e0e0e;border:1px solid #c8ff0030;border-radius:10px;padding:18px;margin-bottom:24px">';
+  h+='<div style="display:flex;align-items:center;margin-bottom:16px">'
+    +'<span style="font-size:10px;color:#c8ff00;letter-spacing:2px;flex:1">TRÆNINGSGUIDE · TRIN '+wizStep+' AF 3</span>'
+    +'<button class="rmb" onclick="wizClose()">×</button></div>';
+  if(wizStep===1){
+    h+='<div style="font-size:14px;color:#e0dcd4;margin-bottom:14px">Hvad vil du opnå?</div>';
+    Object.entries(GOALS).forEach(([id,g])=>{
+      h+='<div onclick="wizSetGoal(\''+id+'\')" style="display:flex;align-items:center;gap:14px;background:#111;border:1px solid #1e1e1e;border-radius:8px;padding:14px;margin-bottom:8px;cursor:pointer">'
+        +'<span style="font-size:24px">'+g.emoji+'</span>'
+        +'<div><div style="font-size:13px;color:#e0dcd4">'+g.label+'</div>'
+        +'<div style="font-size:11px;color:#555;margin-top:2px">'+g.tagline+'</div></div></div>';
+    });
+  } else if(wizStep===2){
+    const g=GOALS[wizGoal];
+    h+='<div style="font-size:14px;color:#e0dcd4;margin-bottom:4px">Hvor mange dage om ugen kan du træne?</div>';
+    h+='<div style="font-size:11px;color:#555;margin-bottom:14px">Vær realistisk — et split du faktisk følger, slår et perfekt split du dropper.</div>';
+    h+='<div style="display:flex;gap:8px;margin-bottom:12px">';
+    [2,3,4].forEach(d=>{
+      const rec=g.recDays.includes(d);
+      h+='<div onclick="wizSetDays('+d+')" style="flex:1;text-align:center;background:#111;border:1px solid '+(rec?"#c8ff0040":"#1e1e1e")+';border-radius:8px;padding:16px 4px;cursor:pointer">'
+        +'<div style="font-family:\'Bebas Neue\';font-size:28px;color:'+(rec?"#c8ff00":"#888")+';line-height:1">'+d+'</div>'
+        +'<div style="font-size:10px;color:#444;margin-top:4px">dage'+(rec?' · anbefalet':'')+'</div></div>';
+    });
+    h+='</div>';
+    h+='<button class="btn-g" style="width:auto;padding:7px 14px;font-size:12px" onclick="wizBack()">← TILBAGE</button>';
+  } else if(wizStep===3){
+    const g=GOALS[wizGoal],split=wizSplit(wizDays);
+    h+='<div style="font-size:14px;color:#e0dcd4;margin-bottom:14px">'+g.emoji+' '+g.label+' · '+wizDays+' dage/uge</div>';
+    h+='<div style="font-size:10px;color:#444;letter-spacing:1.5px;margin-bottom:8px">DIT ANBEFALEDE SPLIT</div>';
+    Object.entries(split).forEach(([d,t])=>{
+      h+='<div style="display:flex;gap:10px;font-size:12px;margin-bottom:5px"><span style="color:#666;width:70px">'+DNF[d]+'</span><span style="color:#c8ff00">'+TL[t]+'</span></div>';
+    });
+    h+='<div style="font-size:10px;color:#444;letter-spacing:1.5px;margin:16px 0 8px">SÅDAN FÅR DU RESULTATER</div>';
+    g.guide.forEach(t=>{h+='<div style="font-size:11px;color:#777;line-height:1.7;margin-bottom:8px">→ '+t+'</div>';});
+    h+='<div style="display:flex;gap:8px;margin-top:14px">';
+    h+='<button class="btn-g" style="width:auto;padding:10px 16px;font-size:13px" onclick="wizBack()">← TILBAGE</button>';
+    h+='<button class="btn-p" style="flex:1" onclick="wizApply()">BRUG DETTE SPLIT →</button>';
+    h+='</div>';
+  }
+  return h+'</div>';
+}
+
 // ── Settings / Split ─────────────────────────────────────────────────────────
 async function loadSettings(){
   const [settingsSnap,programsSnap]=await Promise.all([
@@ -1422,6 +1496,7 @@ async function loadSettings(){
   ]);
   customPrograms={};
   programsSnap.forEach(d=>{customPrograms[d.id]=d.data();});
+  userGoal=settingsSnap.exists()?(settingsSnap.data().goal||null):null;
   if(settingsSnap.exists()&&settingsSnap.data().days&&Object.keys(settingsSnap.data().days).length){
     userSplit=settingsSnap.data().days;
     showView("log");
@@ -1431,7 +1506,7 @@ async function loadSettings(){
   }
 }
 async function saveSplit(){
-  await setDoc(doc(db,"users",CU.uid,"settings","split"),{days:userSplit});
+  await setDoc(doc(db,"users",CU.uid,"settings","split"),{days:userSplit,goal:userGoal||null});
   activeDaySelect=null;updateHdr();showView("today");
 }
 function applyPreset(name){userSplit={...PRESETS[name]};activeDaySelect=null;renderSettings();}
@@ -1452,6 +1527,33 @@ function renderSettings(){
   const TL={TRAEK:"TRÆK",SKUB:"SKUB",BEN:"BEN"};
   const hasSplit=Object.keys(userSplit).length>0;
   let h='<div style="font-size:10px;color:#444;letter-spacing:2px;margin-bottom:20px">DIT TRÆNINGSSPLIT</div>';
+  // ── Mål-wizard ──
+  if(wizStep){
+    h+=renderWizard();
+  } else if(!userGoal||!hasSplit){
+    h+='<div onclick="startWizard()" style="display:flex;align-items:center;gap:14px;background:#131a00;border:1px solid #c8ff0040;border-radius:10px;padding:16px;margin-bottom:24px;cursor:pointer">'
+      +'<span style="font-size:26px">🎯</span>'
+      +'<div style="flex:1"><div style="font-size:13px;color:#c8ff00">Ny her? Start med guiden</div>'
+      +'<div style="font-size:11px;color:#666;margin-top:2px">Fortæl os dit mål — vi sætter dit program op og forklarer hvordan du når det.</div></div>'
+      +'<span style="color:#c8ff00">→</span></div>';
+  } else {
+    const g=GOALS[userGoal];
+    if(g){
+      h+='<div style="background:#0e0e0e;border:1px solid #1e1e1e;border-radius:10px;padding:14px 16px;margin-bottom:24px">';
+      h+='<div style="display:flex;align-items:center;gap:10px">'
+        +'<span style="font-size:18px">'+g.emoji+'</span>'
+        +'<div style="flex:1"><div style="font-size:10px;color:#444;letter-spacing:1.5px">DIT MÅL</div>'
+        +'<div style="font-size:13px;color:#e0dcd4;margin-top:1px">'+g.label+'</div></div>'
+        +'<button class="btn-g" style="width:auto;padding:6px 12px;font-size:11px" onclick="toggleGoalGuide()">'+(goalGuideOpen?"SKJUL":"SE GUIDE")+'</button>'
+        +'<button class="btn-g" style="width:auto;padding:6px 12px;font-size:11px" onclick="startWizard()">SKIFT</button></div>';
+      if(goalGuideOpen){
+        h+='<div style="margin-top:14px;padding-top:12px;border-top:1px solid #1a1a1a">';
+        g.guide.forEach(t=>{h+='<div style="font-size:11px;color:#777;line-height:1.7;margin-bottom:8px">→ '+t+'</div>';});
+        h+='</div>';
+      }
+      h+='</div>';
+    }
+  }
   if(!hasSplit)h+='<div style="font-size:13px;color:#555;margin-bottom:20px;line-height:1.8">Vælg et preset eller byg dit eget split — tryk på en dag for at vælge program.</div>';
   h+='<div style="margin-bottom:20px"><div style="font-size:10px;color:#444;letter-spacing:1.5px;margin-bottom:10px">HURTIG OPSÆTNING</div><div style="display:flex;gap:8px">';
   h+='<button class="btn-g" style="width:auto;padding:10px 18px" onclick="applyPreset(\'PPL\')">PPL · 3 dage</button>';
@@ -1506,15 +1608,9 @@ function renderSettings(){
   const trainDays=Object.keys(userSplit).length;
   if(trainDays)h+='<div style="font-size:11px;color:#555;margin-bottom:16px">'+trainDays+' træningsdage pr. uge</div>';
   h+='<button class="btn-p"'+(trainDays?'':' disabled')+' onclick="saveSplit()">GEM SPLIT</button>';
-  // API key section — only visible to app owner
+  // Debug section — only visible to app owner
   if(CU&&CU.email==="kenneth.l.thomsen@gmail.com"){
     h+='<div style="margin-top:32px;padding-top:20px;border-top:1px solid #1a1a1a">'
-      +'<div style="font-size:10px;color:#444;letter-spacing:1.5px;margin-bottom:8px">EXERCISEDB API (ADMIN)</div>'
-      +'<input id="apikey-input" class="field" type="password" placeholder="RapidAPI nøgle..." value="'+esc(rapidApiKey)+'"/>'
-      +'<button class="btn-g" style="width:auto;padding:9px 18px;margin-top:8px;font-size:12px" onclick="saveApiKey()">'+(rapidApiKey?"OPDATER":"GEM")+'</button>'
-      +(rapidApiKey?'<div style="font-size:10px;color:#2a5a2a;margin-top:6px">Nøgle aktiv.</div>':"")
-      +'</div>'
-      +'<div style="margin-top:24px;padding-top:20px;border-top:1px solid #1a1a1a">'
       +'<div style="font-size:10px;color:#444;letter-spacing:1.5px;margin-bottom:10px">BILLEDE DEBUG (ADMIN)</div>'
       +'<input id="dbg-input" class="field" placeholder="Øvelsesnavn (f.eks. seated row)..." style="margin-bottom:8px"/>'
       +'<button class="btn-g" style="width:auto;padding:9px 18px;font-size:12px" onclick="debugWger()">TEST BILLEDE</button>'

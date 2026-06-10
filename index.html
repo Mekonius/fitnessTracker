@@ -51,6 +51,10 @@ input:focus,textarea:focus{border-color:#c8ff00!important}
 .asb{width:100%;background:none;border:1px dashed #1e1e1e;border-radius:4px;color:#444;cursor:pointer;padding:5px;font-size:11px;letter-spacing:1px;font-family:inherit;margin-top:4px}
 .asb:hover{border-color:#c8ff0055;color:#c8ff00}
 .avatar{width:28px;height:28px;border-radius:50%;object-fit:cover}
+.exanim{position:relative;margin-bottom:12px;background:#fff;border-radius:6px;overflow:hidden}
+.exanim img{width:100%;max-height:220px;object-fit:contain;display:block}
+.exanim .f2{position:absolute;inset:0;animation:exswap 1.6s steps(1) infinite}
+@keyframes exswap{0%{opacity:0}50%{opacity:1}100%{opacity:0}}
 .profile-card{background:#141414;border:1px solid #222;border-radius:12px;padding:28px 20px;display:flex;flex-direction:column;align-items:center;gap:12px;cursor:pointer;transition:all .2s;position:relative}
 .profile-card:hover{border-color:#c8ff00;background:#1a1a1a}
 .profile-avatar{width:64px;height:64px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:26px;font-family:"Bebas Neue",sans-serif;letter-spacing:1px;flex-shrink:0}
@@ -1250,30 +1254,19 @@ async function debugWger(){
   const out=document.getElementById("dbg-result");
   if(!out)return;
   if(!name){out.innerHTML='<span style="color:#ff6b6b">Indtast et navn.</span>';return;}
-  out.innerHTML='<span style="color:#555">Henter...</span>';
-  const term=name.toLowerCase().replace(/\s*\/.*$/,"").replace(/[^a-z0-9 ]/g,"").trim();
-  if(!rapidApiKey){out.innerHTML='<span style="color:#ff6b6b">Ingen API nøgle gemt.</span>';return;}
-  const url="https://exercisedb.p.rapidapi.com/exercises/name/"+encodeURIComponent(term)+"?limit=1";
-  out.innerHTML='<span style="color:#333;word-break:break-all">Søger: '+esc(term)+'</span>';
+  out.innerHTML='<span style="color:#555">Henter øvelsesdatabase...</span>';
   try{
-    const r=await xhrGet(url,{"X-RapidAPI-Key":rapidApiKey,"X-RapidAPI-Host":"exercisedb.p.rapidapi.com"});
-    out.innerHTML+='<br><span style="color:#555">Status: '+r.status+'</span>';
-    if(r.ok){
-      const data=JSON.parse(r.text);
-      const hit=data?.[0];
-      if(hit){
-        out.innerHTML+='<br><span style="color:#555">Match: '+esc(hit.name)+'</span>';
-        out.innerHTML+='<br><span style="color:#333">Felter: '+esc(Object.keys(hit).join(", "))+'</span>';
-        out.innerHTML+='<br><span style="color:#333">gifUrl: '+esc(hit.gifUrl||"(mangler)")+'</span>';
-        out.innerHTML+='<br><span style="color:#333">id: '+esc(hit.id)+'</span>';
-        const gifUrl=hit.gifUrl||"https://v2.exercisedb.io/image/"+hit.id+".gif";
-        out.innerHTML+='<br><span style="color:#555">Prøver: '+esc(gifUrl)+'</span>';
-        out.innerHTML+='<br><img src="'+esc(gifUrl)+'" style="max-width:100%;border-radius:6px;margin-top:8px" onerror="dbgImgErr(this)"/>';
-      } else {
-        out.innerHTML+='<br><span style="color:#ff6b6b">Ingen match for: '+esc(term)+'</span>';
-      }
+    await loadFEDB();
+    const term=IMG_ALIAS[name]||name.toLowerCase().replace(/\s*\/.*$/,"").replace(/[^a-z0-9 ()-]/g,"").trim();
+    out.innerHTML='<span style="color:#333">Søger: '+esc(term)+' ('+FEDB.length+' øvelser i databasen)</span>';
+    const hit=fedbMatch(term);
+    if(hit){
+      out.innerHTML+='<br><span style="color:#c8ff00">Match: '+esc(hit.n)+'</span>';
+      out.innerHTML+='<br><span style="color:#555">Billeder: '+hit.i.length+'</span>';
+      out.innerHTML+='<div id="dbg-anim" style="margin-top:8px"></div>';
+      showAnim("dbg-anim",hit.i,hit.n);
     } else {
-      out.innerHTML+='<br><span style="color:#ff6b6b">HTTP '+r.status+': '+esc(r.text.slice(0,200))+'</span>';
+      out.innerHTML+='<br><span style="color:#ff6b6b">Ingen match. Prøv et mere generisk navn (engelsk).</span>';
     }
   }catch(e){
     out.innerHTML+='<br><span style="color:#ff6b6b">Fejl: '+esc(e.message)+'</span>';
@@ -1304,51 +1297,120 @@ function xhrGet(url,headers){
   });
 }
 const memInstr={}; // in-memory cache of instructions per exId
+
+// ── free-exercise-db (open source, ingen API-nøgle) ──────────────────────────
+// ~870 øvelser med start/slut-fotos. Vi skifter mellem de to billeder med CSS
+// så det ligner en animation. Public domain: github.com/yuhonas/free-exercise-db
+const FEDB_IMG="https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@main/exercises/";
+const FEDB_JSON="https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@main/dist/exercises.json";
+// Eksplicit mapping fra katalog-id til navn i free-exercise-db for præcise match
+const IMG_ALIAS={
+  seated_row:"seated cable rows",lat_pulldown:"wide-grip lat pulldown",
+  bent_row:"bent over barbell row",cable_row:"seated cable rows",
+  pullup:"pullups",deadlift:"barbell deadlift",face_pull:"face pull",
+  shrug:"barbell shrug",chest_press:"machine bench press",
+  incline_press:"barbell incline bench press - medium grip",
+  decline_press:"decline barbell bench press",pec_deck:"butterfly",
+  cable_fly:"cable crossover",pushup:"pushups",dips_chest:"dips - chest version",
+  shoulder_press:"machine shoulder (military) press",
+  lateral_raise:"side lateral raise",front_raise:"front dumbbell raise",
+  upright_row:"upright barbell row",arnold_press:"arnold dumbbell press",
+  bicep_curl:"dumbbell bicep curl",hammer_curl:"hammer curls",
+  cable_curl:"standing biceps cable curl",preacher_curl:"preacher curl",
+  concentration_curl:"concentration curls",tricep_pushdown:"triceps pushdown",
+  overhead_ext:"standing dumbbell triceps extension",
+  skull_crusher:"lying triceps press",dips_tri:"dips - triceps version",
+  close_grip:"close-grip barbell bench press",squat:"barbell squat",
+  leg_press:"leg press",romanian_dl:"romanian deadlift",
+  leg_curl:"seated leg curl",leg_extension:"leg extensions",
+  calf_raise:"standing calf raises",lunge:"dumbbell lunges",
+  hip_thrust:"barbell hip thrust",bulgarian:"split squat with dumbbells",
+  plank:"plank",russian_twist:"russian twist",
+  leg_raise:"flat bench lying leg raise",crunch:"crunches",
+  side_plank:"side bridge",ab_wheel:"ab roller"
+};
+let FEDB=null,fedbPromise=null;
+function loadFEDB(){
+  if(FEDB)return Promise.resolve(FEDB);
+  if(fedbPromise)return fedbPromise;
+  // prøv localStorage først (trimmet index)
+  try{
+    const cached=localStorage.getItem("loft_fedb_v1");
+    if(cached){FEDB=JSON.parse(cached);return Promise.resolve(FEDB);}
+  }catch(e){}
+  fedbPromise=fetch(FEDB_JSON).then(r=>r.json()).then(arr=>{
+    FEDB=arr.map(e=>({n:e.name.toLowerCase(),i:e.images||[]})).filter(e=>e.i.length);
+    try{localStorage.setItem("loft_fedb_v1",JSON.stringify(FEDB));}catch(e){}
+    return FEDB;
+  }).catch(e=>{fedbPromise=null;throw e;});
+  return fedbPromise;
+}
+function fedbMatch(term){
+  const t=term.toLowerCase().trim();
+  let best=null,bestScore=0;
+  for(const e of FEDB){
+    let score=0;
+    if(e.n===t)score=100;
+    else if(e.n.includes(t))score=80-Math.min(e.n.length-t.length,30);
+    else{
+      const tw=t.split(" ").filter(w=>w.length>2);
+      if(tw.length){
+        const hit=tw.filter(w=>e.n.includes(w)).length;
+        if(hit)score=(hit/tw.length)*60-e.n.length/50;
+      }
+    }
+    if(score>bestScore){bestScore=score;best=e;}
+  }
+  return bestScore>=40?best:null;
+}
+function showAnim(elId,imgs,name){
+  const el=document.getElementById(elId);
+  if(!el||!imgs?.length)return;
+  const u=p=>p.startsWith("http")?p:FEDB_IMG+p;
+  if(imgs.length>=2){
+    el.innerHTML='<div class="exanim"><img src="'+esc(u(imgs[0]))+'" alt="'+esc(name)+'"/><img class="f2" src="'+esc(u(imgs[1]))+'" alt=""/></div>';
+  } else {
+    el.innerHTML='<div class="exanim"><img src="'+esc(u(imgs[0]))+'" alt="'+esc(name)+'"/></div>';
+  }
+}
 async function loadGifForExercise(exId,name,elId){
   elId=elId||("gif-"+exId);
   const el=document.getElementById(elId);
   if(!el)return;
+  // 0. lokale caches
+  const li=JSON.parse(localStorage.getItem("loft_imgs")||"{}");
+  if(li[exId]?.length){showAnim(elId,li[exId],name);return;}
   const lc=JSON.parse(localStorage.getItem("loft_gifs")||"{}");
-  if(lc[exId]&&!lc[exId].includes("wger.de")){showGif(elId,lc[exId],name);return;}
+  if(lc[exId]&&!lc[exId].includes("wger.de")&&!lc[exId].includes("v2.exercisedb.io")){showGif(elId,lc[exId],name);return;}
   if(memInstr[exId]){showInstructions(elId,memInstr[exId]);return;}
   el.innerHTML='<div style="font-size:10px;color:#444;text-align:center;padding:10px 0">Henter...</div>';
-  // 1. Firestore shared cache
+  // 1. Firestore delt cache
   try{
     const snap=await getDoc(doc(db,"exercises",exId));
     const fd=snap.exists()?snap.data():null;
-    if(fd?.gifUrl&&!fd.gifUrl.includes("wger.de")){
+    if(fd?.images?.length){
+      li[exId]=fd.images;localStorage.setItem("loft_imgs",JSON.stringify(li));
+      showAnim(elId,fd.images,name);return;
+    }
+    if(fd?.gifUrl&&!fd.gifUrl.includes("wger.de")&&!fd.gifUrl.includes("v2.exercisedb.io")){
       lc[exId]=fd.gifUrl;localStorage.setItem("loft_gifs",JSON.stringify(lc));
       showGif(elId,fd.gifUrl,name);return;
     }
-    if(fd?.instructions?.length){
-      memInstr[exId]=fd.instructions;
-      showInstructions(elId,fd.instructions);return;
-    }
-  }catch(e){console.warn("GIF["+exId+"]: Firestore error:",e.message);}
-  // 2. ExerciseDB via RapidAPI
-  if(!rapidApiKey){el.innerHTML='';return;}
+    if(fd?.instructions?.length)memInstr[exId]=fd.instructions; // gem til fallback
+  }catch(e){}
+  // 2. free-exercise-db
   try{
-    const term=name.toLowerCase().replace(/\s*\/.*$/,"").replace(/[^a-z0-9 ]/g,"").trim();
-    const r=await xhrGet("https://exercisedb.p.rapidapi.com/exercises/name/"+encodeURIComponent(term)+"?limit=1",
-      {"X-RapidAPI-Key":rapidApiKey,"X-RapidAPI-Host":"exercisedb.p.rapidapi.com"});
-    if(r.ok){
-      const hit=JSON.parse(r.text)?.[0];
-      if(hit){
-        if(hit.gifUrl){
-          setDoc(doc(db,"exercises",exId),{gifUrl:hit.gifUrl,name}).catch(()=>{});
-          lc[exId]=hit.gifUrl;localStorage.setItem("loft_gifs",JSON.stringify(lc));
-          showGif(elId,hit.gifUrl,name);return;
-        }
-        if(hit.instructions?.length){
-          setDoc(doc(db,"exercises",exId),{instructions:hit.instructions,name}).catch(()=>{});
-          memInstr[exId]=hit.instructions;
-          showInstructions(elId,hit.instructions);return;
-        }
-      }
-    } else {
-      console.warn("GIF["+exId+"]: API error",r.status,":",r.text.slice(0,200));
+    await loadFEDB();
+    const term=IMG_ALIAS[exId]||name.toLowerCase().replace(/\s*\/.*$/,"").replace(/[^a-z0-9 ()-]/g,"").trim();
+    const hit=fedbMatch(term);
+    if(hit){
+      li[exId]=hit.i;localStorage.setItem("loft_imgs",JSON.stringify(li));
+      setDoc(doc(db,"exercises",exId),{images:hit.i,name},{merge:true}).catch(()=>{});
+      showAnim(elId,hit.i,name);return;
     }
-  }catch(e){console.warn("GIF["+exId+"]: exception:",e.message);}
+  }catch(e){console.warn("IMG["+exId+"]: free-exercise-db fejl:",e.message);}
+  // 3. fallback: instruktioner fra tidligere ExerciseDB-cache
+  if(memInstr[exId]){showInstructions(elId,memInstr[exId]);return;}
   el.innerHTML='';
 }
 

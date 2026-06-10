@@ -342,38 +342,89 @@ const PROG = {
 Object.entries(CATALOG).forEach(([grp,exs])=>exs.forEach(ex=>{EX_MUSCLE[ex.id]=grp;}));
 
 // ── Analysis ──────────────────────────────────────────────────────────────────
+// Evidensgrundlag:
+//  - 10–20 sæt pr. muskelgruppe pr. uge er optimalt for muskelvækst
+//    (Schoenfeld, Ogborn & Krieger 2017, dose-response meta-analyse; Baz-Valle 2022)
+//  - ≥2 træninger pr. uge pr. muskelgruppe slår 1 ved samme volumen
+//    (Schoenfeld, Ogborn & Krieger 2016, Sports Medicine meta-analyse)
+//  - ~48 timers restitution pr. muskelgruppe mellem sessioner
 const GRP_LABEL={RYG:"Ryg",BRYST:"Bryst",SKULDER:"Skulder",BICEPS:"Biceps",TRICEPS:"Triceps",BEN:"Ben",CORE:"Core"};
-function analyzeWeeklyMuscles(){
-  const covered=new Set();
-  Object.values(userSplit).forEach(type=>{
-    const prog=getProgram(type);
-    if(!prog)return;
-    prog.ex.forEach(ex=>{if(EX_MUSCLE[ex.id])covered.add(EX_MUSCLE[ex.id]);});
+const MAJOR_GRPS=["RYG","BRYST","SKULDER","BEN"];
+function analyzeWeeklyVolume(){
+  const vol={},freqDays={};let unmapped=0;
+  Object.keys(CATALOG).forEach(g=>{vol[g]=0;freqDays[g]=new Set();});
+  Object.entries(userSplit).forEach(([day,type])=>{
+    const prog=getProgram(type);if(!prog)return;
+    prog.ex.forEach(ex=>{
+      const g=EX_MUSCLE[ex.id];
+      if(!g){unmapped++;return;}
+      vol[g]+=(+ex.sets||3);
+      freqDays[g].add(+day);
+    });
   });
-  const all=Object.keys(CATALOG);
-  return{covered:[...covered],missing:all.filter(g=>!covered.has(g))};
+  const freq={};Object.keys(freqDays).forEach(g=>{freq[g]=freqDays[g].size;});
+  const backToBack=[];
+  Object.entries(freqDays).forEach(([g,ds])=>{
+    const a=[...ds].sort((x,y)=>x-y);
+    if(a.length<2)return;
+    for(let i=0;i<a.length;i++){
+      const gap=(a[(i+1)%a.length]-a[i]+7)%7||7;
+      if(gap===1){backToBack.push(g);break;}
+    }
+  });
+  return{vol,freq,backToBack,unmapped};
 }
-function generateSuggestions(covered,missing){
+function groupStatus(v){return v===0?"none":v<10?"low":v<=20?"optimal":"high";}
+function programScore(an){
+  let pts=0,max=0;
+  Object.keys(CATALOG).forEach(g=>{
+    const w=MAJOR_GRPS.includes(g)?2:1;max+=w*100;
+    const st=groupStatus(an.vol[g]);
+    let p=st==="optimal"?100:st==="none"?0:55;
+    if(p>0&&an.freq[g]<2)p=Math.min(p,75);
+    pts+=w*p;
+  });
+  return Math.round(pts/max*100);
+}
+function analyzeWeeklyMuscles(){
+  const an=analyzeWeeklyVolume();
+  const covered=Object.keys(an.vol).filter(g=>an.vol[g]>0);
+  return{covered,missing:Object.keys(CATALOG).filter(g=>an.vol[g]===0),an};
+}
+function generateSuggestions(covered,missing,an){
   const s=[];
-  const hasGroup=gs=>gs.some(g=>covered.includes(g));
   if(missing.includes("BEN"))
     s.push({lvl:"warn",txt:"Du træner aldrig ben — quadriceps, baglår og glutes får ingen stimulus.",fix:"Tilføj en BEN-dag til dit split, eller inkluder squat/leg press i et eksisterende program."});
   if(missing.includes("RYG"))
     s.push({lvl:"warn",txt:"Ingen rygtræning i dit split.",fix:"Tilføj træk-øvelser (Seated Row, Lat Pulldown) for at undgå muskel-ubalance og skulderskader."});
   if(missing.includes("CORE"))
     s.push({lvl:"info",txt:"Ingen core-træning fundet i dine programmer.",fix:"Tilføj planke eller russian twist til et af dine eksisterende programmer."});
-  const hasPush=hasGroup(["BRYST","SKULDER","TRICEPS"]);
-  const hasPull=hasGroup(["RYG","BICEPS"]);
-  if(hasPush&&!hasPull)
+  Object.keys(CATALOG).forEach(g=>{
+    const v=an.vol[g];
+    if(v>0&&v<10)
+      s.push({lvl:"info",txt:GRP_LABEL[g]+" får kun "+v+" sæt/uge — under det optimale interval (10–20).",fix:"Tilføj ca. "+(10-v)+" sæt mere pr. uge. Dosis-respons-forskning viser bedst vækst ved 10–20 sæt pr. muskelgruppe pr. uge (Schoenfeld 2017)."});
+    if(v>20)
+      s.push({lvl:"info",txt:GRP_LABEL[g]+" får "+v+" sæt/uge — over ~20 sæt giver aftagende udbytte.",fix:"Flyt volumen til muskelgrupper med færre sæt, eller hold det hvis du restituerer fint."});
+    if(v>=10&&an.freq[g]===1)
+      s.push({lvl:"info",txt:GRP_LABEL[g]+" trænes kun 1×/uge trods "+v+" sæt.",fix:"Fordel volumen over 2 dage — 2×/uge pr. muskelgruppe giver mere vækst end 1× ved samme volumen (Schoenfeld 2016)."});
+  });
+  an.backToBack.forEach(g=>
+    s.push({lvl:"warn",txt:GRP_LABEL[g]+" trænes to dage i træk.",fix:"Musklen behøver ca. 48 timers restitution — læg en hviledag eller en anden muskelgruppe imellem."}));
+  const push=(an.vol.BRYST||0)+(an.vol.SKULDER||0)+(an.vol.TRICEPS||0);
+  const pull=(an.vol.RYG||0)+(an.vol.BICEPS||0);
+  if(push&&!pull)
     s.push({lvl:"warn",txt:"Du træner kun skub-muskler (bryst/skulder/triceps) — ingen modpart.",fix:"Tilføj ryg- og bicepstræning. Uden træk risikerer du skulderskader og dårlig holdning."});
-  if(!hasPush&&hasPull)
-    s.push({lvl:"info",txt:"Du har primært træk-muskler uden tilsvarende skub.",fix:"Overvej at tilføje bryst- og skulderpres for balance."});
-  // Check recent session volume
+  if(push&&pull&&push/pull>2)
+    s.push({lvl:"warn",txt:"Skub-volumen ("+push+" sæt/uge) er over dobbelt så høj som træk ("+pull+" sæt/uge).",fix:"Balancer forholdet mod ca. 1:1 for skuldersundhed og holdning."});
+  if(push&&pull&&pull/push>2)
+    s.push({lvl:"info",txt:"Træk-volumen ("+pull+" sæt/uge) er markant højere end skub ("+push+" sæt/uge).",fix:"Overvej mere bryst- og skulderpres for balance."});
+  if(an.unmapped>0)
+    s.push({lvl:"info",txt:an.unmapped+" egne øvelser kunne ikke kategoriseres i analysen.",fix:"Volumen-analysen tæller kun katalog-øvelser. Brug katalogøvelser hvor muligt, så tallene passer."});
   const recentSets=Object.entries(sessions)
     .filter(([d])=>{const diff=(new Date()-new Date(d+"T12:00:00"))/(864e5);return diff<=7;})
     .reduce((a,[,s2])=>a+(s2.exercises||[]).reduce((b,e)=>b+(e.sets||[]).length,0),0);
   if(Object.keys(sessions).length>0&&recentSets<10)
-    s.push({lvl:"info",txt:`Kun ${recentSets} sæt de seneste 7 dage — under minimumsniveauet for fremgang.`,fix:"Forsøg mindst 10 sæt pr. muskelgruppe pr. uge. Overvej at øge frekvensen eller antallet af sæt."});
+    s.push({lvl:"info",txt:`Kun ${recentSets} sæt logget de seneste 7 dage.`,fix:"Planen virker kun hvis den følges — konsistens slår alt."});
   return s;
 }
 
@@ -381,11 +432,11 @@ function generateSuggestions(covered,missing){
 function getType(ds){
   return userSplit[new Date(ds+"T12:00:00").getDay()]||null;
 }
-const tds=d=>d.toISOString().split("T")[0];
+const tds=d=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
 const fmtDate=ds=>new Date(ds+"T12:00:00").toLocaleDateString("da-DK",{weekday:"long",day:"numeric",month:"long"});
 const dayName=ds=>new Date(ds+"T12:00:00").toLocaleDateString("da-DK",{weekday:"long"});
 const cap=s=>s.charAt(0).toUpperCase()+s.slice(1);
-const esc=s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+const esc=s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 const iSet=()=>({reps:"",weight:""});
 function getProgram(type){
   if(!type)return null;
@@ -405,7 +456,7 @@ const pill=t=>'<span class="pill '+(t==="TRAEK"?"pill-t":t==="SKUB"?"pill-s":"pi
 // ── State ─────────────────────────────────────────────────────────────────────
 let CU=null,sessions={},activeDate=tds(new Date()),userSplit={},customPrograms={};
 let curView="today",logEx=[],logNote="",openEx=null,unsubSess=null;
-let activeDaySelect=null,editingProgram=null,builderMode=null,catalogTab="RYG",logRating=null;
+let activeDaySelect=null,editingProgram=null,builderMode=null,catalogTab="RYG",logRating=null,logInfoEx=null;
 let rapidApiKey=localStorage.getItem("loft_api_key")||"";
 let profiles={},activeProfile=null,histProfileId=null,selectedColor=null;
 const COLORS=["#c8ff00","#5bc8ff","#ff8c5b","#c85bff","#ff5b8c","#5bffc8","#ffd75b","#ff5b5b"];
@@ -424,6 +475,7 @@ window.applyScheme = (xi,reps)=>{
 window.rmSet    = (xi,si)=>{logEx[xi].sets.splice(si,1);renderLog();};
 window.saveLog    = saveLog;
 window.setLogRating = r=>{logRating=r;renderLog();};
+window.toggleLogInfo = id=>{logInfoEx=logInfoEx===id?null:id;renderLog();};
 window.toggleEx = id=>{openEx=openEx===id?null:id;renderProgram();};
 window.setDate  = ds=>{activeDate=ds;if(curView==="program")renderProgram();else if(curView==="log"){initLog();renderLog();}};
 window.showView = showView;
@@ -695,7 +747,7 @@ function renderToday(){
   const vals=Object.values(sessions),tot=vals.length;
   const byType={TRAEK:0,SKUB:0,BEN:0};vals.forEach(s=>{if(s.type)byType[s.type]=(byType[s.type]||0)+1;});
   const splitTypes=[...new Set(Object.values(userSplit))];
-  const statRows=[[tot,"Total"],...splitTypes.map(t=>[byType[t],t==="TRAEK"?"Træk":t==="SKUB"?"Skub":"Ben"])].slice(0,3);
+  const statRows=[[tot,"Total"],...splitTypes.map(t=>[byType[t]||0,typeLabel(t)])].slice(0,3);
   h+='</div><div style="margin-bottom:24px"><div style="font-size:10px;color:#444;letter-spacing:2px;margin-bottom:10px">MINE STATS</div><div style="display:grid;grid-template-columns:'+Array(statRows.length).fill("1fr").join(" ")+';gap:8px">';
   statRows.forEach(([v,l])=>{
     h+='<div class="sbox"><div style="font-family:\'Bebas Neue\';font-size:32px;color:#c8ff00;line-height:1">'+v+'</div><div style="font-size:10px;color:#444;letter-spacing:1.5px;margin-top:3px">'+l.toUpperCase()+'</div></div>';
@@ -704,17 +756,27 @@ function renderToday(){
   if(isTrain)h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:24px"><button class="btn-g" onclick="activeDate=\''+today+'\';showView(\'program\')">SE PROGRAM →</button><button class="btn-p" onclick="activeDate=\''+today+'\';showView(\'log\')">LOG TRÆNING →</button></div>';
   // ── Analyse ──
   if(Object.keys(userSplit).length){
-    const {covered,missing}=analyzeWeeklyMuscles();
-    const suggestions=generateSuggestions(covered,missing);
-    const hasWarnings=missing.length>0||suggestions.some(s=>s.lvl==="warn");
-    h+='<div style="margin-bottom:24px"><div style="font-size:10px;color:'+(hasWarnings?"#ff8080":"#444")+';letter-spacing:2px;margin-bottom:12px">PROGRAM ANALYSE</div>';
-    // Coverage grid
-    h+='<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:14px">';
+    const {covered,missing,an}=analyzeWeeklyMuscles();
+    const suggestions=generateSuggestions(covered,missing,an);
+    const score=programScore(an);
+    const scoreCol=score>=80?"#c8ff00":score>=50?"#ffc14d":"#ff6b6b";
+    h+='<div style="margin-bottom:24px">';
+    h+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">'
+      +'<span style="font-size:10px;color:#444;letter-spacing:2px;flex:1">PROGRAM ANALYSE</span>'
+      +'<span style="font-family:\'Bebas Neue\';font-size:26px;color:'+scoreCol+';line-height:1">'+score+'</span>'
+      +'<span style="font-size:10px;color:#444">/100</span></div>';
+    // Volumen pr. muskelgruppe (sæt/uge + frekvens)
     Object.keys(CATALOG).forEach(g=>{
-      const ok=covered.includes(g);
-      h+='<div style="padding:4px 10px;border-radius:20px;font-size:11px;letter-spacing:0.5px;border:1px solid '+(ok?"#c8ff0030":"#ff444440")+';color:'+(ok?"#c8ff00":"#ff6b6b")+';background:'+(ok?"#1e2a00":"#1a0808")+'">'+(ok?"✓":"✗")+" "+GRP_LABEL[g]+'</div>';
+      const v=an.vol[g],f=an.freq[g],st=groupStatus(v);
+      const col=st==="optimal"?"#c8ff00":st==="none"?"#ff6b6b":"#ffc14d";
+      const pct=Math.min(v/20*100,100);
+      h+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:7px">'
+        +'<span style="font-size:11px;color:#666;width:60px;flex-shrink:0">'+GRP_LABEL[g]+'</span>'
+        +'<div style="flex:1;height:5px;background:#1a1a1a;border-radius:3px;overflow:hidden">'
+        +'<div style="width:'+pct+'%;height:100%;background:'+col+';opacity:.8"></div></div>'
+        +'<span style="font-size:10px;color:'+col+';width:86px;text-align:right;flex-shrink:0">'+v+' sæt · '+f+'×/uge</span></div>';
     });
-    h+='</div>';
+    h+='<div style="font-size:10px;color:#2e2e2e;margin:10px 0 14px;line-height:1.6">Mål: 10–20 sæt og min. 2 træninger pr. muskelgruppe pr. uge (Schoenfeld et al. 2016, 2017).</div>';
     // Suggestions
     if(suggestions.length){
       suggestions.forEach(s=>{
@@ -724,7 +786,7 @@ function renderToday(){
         h+='<div style="font-size:11px;color:#555;line-height:1.6">→ '+esc(s.fix)+'</div></div>';
       });
     } else {
-      h+='<div style="font-size:12px;color:#2a5a2a;text-align:center;padding:10px 0">Dit program dækker alle muskelgrupper godt.</div>';
+      h+='<div style="font-size:12px;color:#2a5a2a;text-align:center;padding:10px 0">Dit program rammer alle evidensbaserede mål. Stærkt.</div>';
     }
     h+='</div>';
   }
@@ -756,11 +818,11 @@ function renderProgram(){
 
 function initLog(){
   const type=getType(activeDate);
-  logRating=null;
+  logRating=null;logInfoEx=null;
   if(!type){logEx=[];logNote="";return;}
   const existing=sessions[activeDate];
   if(existing){
-    logEx=JSON.parse(JSON.stringify(existing.exercises||[]));logNote=existing.note||"";return;
+    logEx=JSON.parse(JSON.stringify(existing.exercises||[]));logNote=existing.note||"";logRating=existing.rating||null;return;
   }
   // Pre-fill from last session of same type
   const prev=Object.entries(sessions)
@@ -793,6 +855,7 @@ function renderLog(){
   logEx.forEach((ex,xi)=>{
     const def=p.ex.find(e=>e.id===ex.id)||{};
     const isFirst=xi===0,isLast=xi===logEx.length-1;
+    const infoOpen=logInfoEx===ex.id;
     h+='<div class="excard" draggable="true" data-xi="'+xi+'">'
       +'<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:10px">'
       +'<div class="drag-handle" data-xi="'+xi+'">⠿</div>'
@@ -800,7 +863,15 @@ function renderLog(){
       +(def.muscles?'<div style="font-size:10px;color:'+p.color+';opacity:.7;margin-top:2px">'+esc(def.muscles)+'</div>':"")
       +(def.reps?'<div style="font-size:10px;color:#333;margin-top:2px">Mål: '+def.sets+' sæt · '+esc(def.reps)+' · '+def.rest+'</div>':"")
       +'</div>'
+      +'<button class="rmb" style="font-size:15px;color:'+(infoOpen?p.color:"#3a3a3a")+';flex-shrink:0" onclick="toggleLogInfo(\''+ex.id+'\')" title="Sådan udføres øvelsen">ⓘ</button>'
       +'</div>';
+    if(infoOpen){
+      h+='<div style="background:#0c0c0c;border:1px solid '+p.color+'22;border-radius:6px;padding:12px;margin-bottom:12px">'
+        +'<div id="lgif-'+ex.id+'"></div>'
+        +(def.machine?'<div style="margin-bottom:8px"><div style="font-size:9px;color:#444;letter-spacing:1.5px;margin-bottom:3px">MASKINE / UDSTYR</div><div style="font-size:11px;color:#777;line-height:1.6">'+esc(def.machine)+'</div></div>':"")
+        +(def.tip?'<div><div style="font-size:9px;color:#444;letter-spacing:1.5px;margin-bottom:3px">TEKNIK</div><div style="font-size:11px;color:#888;line-height:1.7">'+esc(def.tip)+'</div></div>':"")
+        +'</div>';
+    }
     if(!def.isTime){
       h+='<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px">';
       h+='<span style="font-size:9px;color:#333;letter-spacing:1px;align-self:center;margin-right:2px">SKEMA</span>';
@@ -831,6 +902,10 @@ function renderLog(){
   h+='<button class="btn-p" id="savebtn" onclick="saveLog()">GEM TRÆNING</button>';
   document.getElementById("vlog").innerHTML=h;
   setupLogDrag();
+  if(logInfoEx){
+    const d=logEx.find(e=>e.id===logInfoEx);
+    if(d)setTimeout(()=>loadGifForExercise(d.id,d.name,"lgif-"+d.id),50);
+  }
 }
 
 function setupLogDrag(){
@@ -1010,14 +1085,15 @@ async function debugWger(){
   }
 }
 window.debugWger=debugWger;
-function showGif(exId,url,name){
-  const el=document.getElementById("gif-"+exId);
+function showGif(elId,url,name){
+  const el=document.getElementById(elId);
   if(el)el.innerHTML='<img src="'+url+'" alt="'+esc(name)+'" style="width:100%;max-height:220px;object-fit:cover;border-radius:6px;margin-bottom:12px;display:block"/>';
 }
-function showInstructions(exId,instructions){
-  const el=document.getElementById("gif-"+exId);
+function showInstructions(elId,instructions){
+  const el=document.getElementById(elId);
   if(!el||!instructions?.length)return;
-  el.innerHTML='<ol style="margin:0 0 12px 0;padding-left:18px;list-style:decimal">'
+  el.innerHTML='<div style="font-size:9px;color:#444;letter-spacing:1.5px;margin-bottom:6px">SÅDAN UDFØRES ØVELSEN</div>'
+    +'<ol style="margin:0 0 12px 0;padding-left:18px;list-style:decimal">'
     +instructions.map(s=>'<li style="font-size:11px;color:#777;line-height:1.7;margin-bottom:2px">'+esc(s)+'</li>').join('')
     +'</ol>';
 }
@@ -1032,59 +1108,52 @@ function xhrGet(url,headers){
     x.send();
   });
 }
-async function loadGifForExercise(exId,name){
-  const el=document.getElementById("gif-"+exId);
-  if(!el){console.log("GIF["+exId+"]: element not found");return;}
-  console.log("GIF["+exId+"] start, name:",name);
+const memInstr={}; // in-memory cache of instructions per exId
+async function loadGifForExercise(exId,name,elId){
+  elId=elId||("gif-"+exId);
+  const el=document.getElementById(elId);
+  if(!el)return;
   const lc=JSON.parse(localStorage.getItem("loft_gifs")||"{}");
-  if(lc[exId]&&!lc[exId].includes("wger.de")){console.log("GIF["+exId+"]: localStorage hit");showGif(exId,lc[exId],name);return;}
+  if(lc[exId]&&!lc[exId].includes("wger.de")){showGif(elId,lc[exId],name);return;}
+  if(memInstr[exId]){showInstructions(elId,memInstr[exId]);return;}
   el.innerHTML='<div style="font-size:10px;color:#444;text-align:center;padding:10px 0">Henter...</div>';
   // 1. Firestore shared cache
   try{
-    console.log("GIF["+exId+"]: checking Firestore...");
     const snap=await getDoc(doc(db,"exercises",exId));
     const fd=snap.exists()?snap.data():null;
     if(fd?.gifUrl&&!fd.gifUrl.includes("wger.de")){
-      console.log("GIF["+exId+"]: Firestore gifUrl hit");
       lc[exId]=fd.gifUrl;localStorage.setItem("loft_gifs",JSON.stringify(lc));
-      showGif(exId,fd.gifUrl,name);return;
+      showGif(elId,fd.gifUrl,name);return;
     }
     if(fd?.instructions?.length){
-      console.log("GIF["+exId+"]: Firestore instructions hit");
-      showInstructions(exId,fd.instructions);return;
+      memInstr[exId]=fd.instructions;
+      showInstructions(elId,fd.instructions);return;
     }
-    console.log("GIF["+exId+"]: Firestore miss");
   }catch(e){console.warn("GIF["+exId+"]: Firestore error:",e.message);}
   // 2. ExerciseDB via RapidAPI
-  if(!rapidApiKey){console.log("GIF["+exId+"]: no API key, giving up");el.innerHTML='';return;}
+  if(!rapidApiKey){el.innerHTML='';return;}
   try{
     const term=name.toLowerCase().replace(/\s*\/.*$/,"").replace(/[^a-z0-9 ]/g,"").trim();
-    console.log("GIF["+exId+"]: fetching ExerciseDB, term:",term);
     const r=await xhrGet("https://exercisedb.p.rapidapi.com/exercises/name/"+encodeURIComponent(term)+"?limit=1",
       {"X-RapidAPI-Key":rapidApiKey,"X-RapidAPI-Host":"exercisedb.p.rapidapi.com"});
-    console.log("GIF["+exId+"]: API status:",r.status);
     if(r.ok){
-      const data=JSON.parse(r.text);
-      const hit=data?.[0];
-      console.log("GIF["+exId+"]: full hit:",JSON.stringify(hit));
+      const hit=JSON.parse(r.text)?.[0];
       if(hit){
         if(hit.gifUrl){
-          console.log("GIF["+exId+"]: gifUrl found:",hit.gifUrl);
           setDoc(doc(db,"exercises",exId),{gifUrl:hit.gifUrl,name}).catch(()=>{});
           lc[exId]=hit.gifUrl;localStorage.setItem("loft_gifs",JSON.stringify(lc));
-          showGif(exId,hit.gifUrl,name);return;
+          showGif(elId,hit.gifUrl,name);return;
         }
         if(hit.instructions?.length){
-          console.log("GIF["+exId+"]: no gifUrl, using instructions");
           setDoc(doc(db,"exercises",exId),{instructions:hit.instructions,name}).catch(()=>{});
-          showInstructions(exId,hit.instructions);return;
+          memInstr[exId]=hit.instructions;
+          showInstructions(elId,hit.instructions);return;
         }
       }
     } else {
-      console.warn("GIF["+exId+"]: API error",r.status,":",r.text.slice(0,300));
+      console.warn("GIF["+exId+"]: API error",r.status,":",r.text.slice(0,200));
     }
-  }catch(e){console.error("GIF["+exId+"]: exception:",e.message);}
-  console.log("GIF["+exId+"]: all sources failed, showing empty");
+  }catch(e){console.warn("GIF["+exId+"]: exception:",e.message);}
   el.innerHTML='';
 }
 
@@ -1113,6 +1182,7 @@ function selectDay(d){activeDaySelect=activeDaySelect===d?null:d;renderSettings(
 function setDayType(d,type){if(type===null)delete userSplit[d];else userSplit[d]=type;renderSettings();}
 function editProgram(id){editingProgram={...customPrograms[id],id};builderMode=null;showView("builder");}
 async function deleteCustomProgram(id){
+  if(!confirm('Slet programmet "'+(customPrograms[id]?.name||"")+'"? Dette kan ikke fortrydes.'))return;
   Object.keys(userSplit).forEach(d=>{if(userSplit[d]===id)delete userSplit[d];});
   await Promise.all([deleteDoc(doc(db,"users",CU.uid,"programs",id)),setDoc(doc(db,"users",CU.uid,"settings","split"),{days:userSplit})]);
   delete customPrograms[id];renderSettings();
@@ -1248,6 +1318,29 @@ function renderBuilder(){
     h+='<div style="color:#2a2a2a;font-size:12px;text-align:center;padding:16px 0;border:1px dashed #1e1e1e;border-radius:6px">Ingen øvelser endnu</div>';
   }
   h+='</div>';
+  // Live analyse af programmet der bygges
+  if(prog.exercises&&prog.exercises.length){
+    const gs={};let tot=0,unmapped=0;
+    prog.exercises.forEach(ex=>{const g=EX_MUSCLE[ex.id];const n=+ex.sets||3;tot+=n;if(g)gs[g]=(gs[g]||0)+n;else unmapped++;});
+    h+='<div style="background:#0a0a0a;border:1px solid #1a1a1a;border-radius:8px;padding:12px 14px;margin-bottom:16px">';
+    h+='<div style="font-size:10px;color:#444;letter-spacing:1.5px;margin-bottom:10px">DAGENS DÆKNING · '+tot+' SÆT I ALT</div>';
+    h+='<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:4px">';
+    Object.entries(gs).forEach(([g,v])=>{
+      const heavy=v>10;
+      h+='<span style="padding:4px 10px;border-radius:20px;font-size:11px;border:1px solid '+(heavy?"#ffc14d40":"#c8ff0030")+';color:'+(heavy?"#ffc14d":"#c8ff00")+';background:'+(heavy?"#1a1400":"#1e2a00")+'">'+GRP_LABEL[g]+' '+v+' sæt</span>';
+    });
+    h+='</div>';
+    const hints=[];
+    Object.entries(gs).forEach(([g,v])=>{
+      if(v>10)hints.push(GRP_LABEL[g]+" får "+v+" sæt på én session — over ~10 sæt pr. muskel pr. session giver aftagende udbytte (Baz-Valle 2022). Fordel hellere over flere dage.");
+    });
+    if(tot>30)hints.push("Over 30 sæt på én session bliver let for langt og tungt — overvej at dele programmet op.");
+    if(prog.exercises.length<3)hints.push("Programmer på under 3 øvelser udnytter sjældent sessionen — tilføj evt. 1–2 øvelser mere.");
+    if(unmapped)hints.push(unmapped+" egne øvelser tælles ikke i analysen — brug katalogøvelser hvor muligt.");
+    hints.forEach(t=>{h+='<div style="font-size:11px;color:#806020;line-height:1.6;margin-top:8px">→ '+esc(t)+'</div>';});
+    if(!hints.length)h+='<div style="font-size:11px;color:#2a5a2a;margin-top:8px">Fornuftig session-struktur. Den samlede uge-analyse ser du under Overblik.</div>';
+    h+='</div>';
+  }
   h+='<div style="display:flex;gap:8px;margin-bottom:16px">';
   h+='<button class="'+(builderMode==="catalog"?"btn-p":"btn-g")+'" style="flex:1" onclick="showCatalog()">+ FRA KATALOG</button>';
   h+='<button class="'+(builderMode==="custom"?"btn-p":"btn-g")+'" style="flex:1" onclick="showCustomForm()">+ EGEN ØVELSE</button>';

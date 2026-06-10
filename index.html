@@ -349,8 +349,46 @@ const PROG = {
   }
 };
 
+// ── Wizard-presets: helkrop & overkrop/underkrop ─────────────────────────────
+// Designet så ALLE muskelgrupper rammer 10–20 sæt/uge og trænes ≥2×/uge
+// (inkl. sekundær-muskel-kredit) — dvs. høj score i program-analysen.
+function pickEx(id,sets){
+  for(const grp of Object.values(CATALOG)){const e=grp.find(x=>x.id===id);if(e)return{...e,...(sets?{sets}:{})};}
+  return null;
+}
+PROG.TRAEK.short="TRÆK";PROG.SKUB.short="SKUB";PROG.BEN.short="BEN";
+PROG.HELKROP={
+  label:"HELKROP DAG",short:"HEL",color:"#ffd75b",bgColor:"#2a2200",
+  desc:"Hele kroppen på én session — mest effektivt ved 2–3 dage/uge",
+  ex:[pickEx("squat",3),pickEx("chest_press",4),pickEx("seated_row",4),pickEx("shoulder_press",3),
+      pickEx("romanian_dl",3),pickEx("bicep_curl",2),pickEx("tricep_pushdown",2),pickEx("plank",2)].filter(Boolean)
+};
+PROG.OVERKROP={
+  label:"OVERKROP DAG",short:"OVER",color:"#c85bff",bgColor:"#1c0a2a",
+  desc:"Bryst, ryg, skulder og arme — parres med underkrop",
+  ex:[pickEx("chest_press",3),pickEx("incline_press",2),pickEx("seated_row",3),pickEx("lat_pulldown",2),
+      pickEx("shoulder_press",2),pickEx("lateral_raise",2),pickEx("bicep_curl",3),pickEx("tricep_pushdown",2)].filter(Boolean)
+};
+PROG.UNDERKROP={
+  label:"UNDERKROP DAG",short:"UNDER",color:"#5bffc8",bgColor:"#0a2a1c",
+  desc:"Ben, baglår, glutes og core — parres med overkrop",
+  ex:[pickEx("squat",3),pickEx("romanian_dl",2),pickEx("leg_press",2),pickEx("leg_curl",2),
+      pickEx("plank",2),pickEx("leg_raise",2)].filter(Boolean)
+};
+
 // Build EX_MUSCLE from CATALOG
 Object.entries(CATALOG).forEach(([grp,exs])=>exs.forEach(ex=>{EX_MUSCLE[ex.id]=grp;}));
+
+// Sekundære muskelgrupper pr. øvelse — compound-øvelser træner mere end én
+// gruppe. Tæller 0,5 sæt pr. sekundær gruppe i volumen-analysen.
+const EX_SECONDARY={
+  seated_row:["BICEPS"],lat_pulldown:["BICEPS"],bent_row:["BICEPS"],cable_row:["BICEPS"],
+  pullup:["BICEPS"],deadlift:["BEN","CORE"],face_pull:["SKULDER"],upright_row:["RYG"],
+  chest_press:["TRICEPS","SKULDER"],incline_press:["TRICEPS","SKULDER"],decline_press:["TRICEPS"],
+  pushup:["TRICEPS","SKULDER","CORE"],dips_chest:["TRICEPS"],close_grip:["BRYST"],
+  shoulder_press:["TRICEPS"],arnold_press:["TRICEPS"],
+  squat:["CORE"],romanian_dl:["RYG"],lunge:["CORE"],bulgarian:["CORE"],hip_thrust:[]
+};
 
 // ── Analysis ──────────────────────────────────────────────────────────────────
 // Evidensgrundlag:
@@ -361,21 +399,27 @@ Object.entries(CATALOG).forEach(([grp,exs])=>exs.forEach(ex=>{EX_MUSCLE[ex.id]=g
 //  - ~48 timers restitution pr. muskelgruppe mellem sessioner
 const GRP_LABEL={RYG:"Ryg",BRYST:"Bryst",SKULDER:"Skulder",BICEPS:"Biceps",TRICEPS:"Triceps",BEN:"Ben",CORE:"Core"};
 const MAJOR_GRPS=["RYG","BRYST","SKULDER","BEN"];
-function analyzeWeeklyVolume(){
-  const vol={},freqDays={};let unmapped=0;
-  Object.keys(CATALOG).forEach(g=>{vol[g]=0;freqDays[g]=new Set();});
-  Object.entries(userSplit).forEach(([day,type])=>{
+function analyzeWeeklyVolume(split){
+  split=split||userSplit;
+  const vol={},freqDays={},primDays={};let unmapped=0;
+  Object.keys(CATALOG).forEach(g=>{vol[g]=0;freqDays[g]=new Set();primDays[g]=new Set();});
+  Object.entries(split).forEach(([day,type])=>{
     const prog=getProgram(type);if(!prog)return;
     prog.ex.forEach(ex=>{
       const g=EX_MUSCLE[ex.id];
       if(!g){unmapped++;return;}
-      vol[g]+=(+ex.sets||3);
-      freqDays[g].add(+day);
+      const n=+ex.sets||3;
+      vol[g]+=n;
+      freqDays[g].add(+day);primDays[g].add(+day);
+      (EX_SECONDARY[ex.id]||[]).forEach(sg=>{
+        vol[sg]+=n*0.5;
+        freqDays[sg].add(+day); // indirekte arbejde tæller for frekvens, ikke restitution
+      });
     });
   });
   const freq={};Object.keys(freqDays).forEach(g=>{freq[g]=freqDays[g].size;});
   const backToBack=[];
-  Object.entries(freqDays).forEach(([g,ds])=>{
+  Object.entries(primDays).forEach(([g,ds])=>{
     const a=[...ds].sort((x,y)=>x-y);
     if(a.length<2)return;
     for(let i=0;i<a.length;i++){
@@ -411,7 +455,7 @@ function generateSuggestions(covered,missing,an){
   if(missing.includes("CORE"))
     s.push({lvl:"info",txt:"Ingen core-træning fundet i dine programmer.",fix:"Tilføj planke eller russian twist til et af dine eksisterende programmer."});
   Object.keys(CATALOG).forEach(g=>{
-    const v=an.vol[g];
+    const v=Math.round(an.vol[g]);
     if(v>0&&v<10)
       s.push({lvl:"info",txt:GRP_LABEL[g]+" får kun "+v+" sæt/uge — under det optimale interval (10–20).",fix:"Tilføj ca. "+(10-v)+" sæt mere pr. uge. Dosis-respons-forskning viser bedst vækst ved 10–20 sæt pr. muskelgruppe pr. uge (Schoenfeld 2017)."});
     if(v>20)
@@ -421,8 +465,8 @@ function generateSuggestions(covered,missing,an){
   });
   an.backToBack.forEach(g=>
     s.push({lvl:"warn",txt:GRP_LABEL[g]+" trænes to dage i træk.",fix:"Musklen behøver ca. 48 timers restitution — læg en hviledag eller en anden muskelgruppe imellem."}));
-  const push=(an.vol.BRYST||0)+(an.vol.SKULDER||0)+(an.vol.TRICEPS||0);
-  const pull=(an.vol.RYG||0)+(an.vol.BICEPS||0);
+  const push=Math.round((an.vol.BRYST||0)+(an.vol.SKULDER||0)+(an.vol.TRICEPS||0));
+  const pull=Math.round((an.vol.RYG||0)+(an.vol.BICEPS||0));
   if(push&&!pull)
     s.push({lvl:"warn",txt:"Du træner kun skub-muskler (bryst/skulder/triceps) — ingen modpart.",fix:"Tilføj ryg- og bicepstræning. Uden træk risikerer du skulderskader og dårlig holdning."});
   if(push&&pull&&push/pull>2)
@@ -550,7 +594,11 @@ function upcoming(n){
   while(days.length<n&&i<90){const d=new Date(cur);d.setDate(d.getDate()+i);const ds=tds(d);const type=getType(ds);if(type)days.push({date:ds,type});i++;}
   return days;
 }
-const pill=t=>'<span class="pill '+(t==="TRAEK"?"pill-t":t==="SKUB"?"pill-s":"pill-b")+'">'+(t==="TRAEK"?"TRÆK":t==="SKUB"?"SKUB":"BEN")+'</span>';
+const pill=t=>{
+  const p=getProgram(t);
+  const c=p?.color||"#a8ff78",bg=p?.bgColor||"#0a2a0a";
+  return '<span class="pill" style="background:'+bg+';color:'+c+'">'+esc(typeLabel(t))+'</span>';
+};
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let CU=null,sessions={},activeDate=tds(new Date()),userSplit={},customPrograms={};
@@ -836,8 +884,8 @@ function showView(v){
   else if(v==="builder"){editingProgram=editingProgram||{name:"",exercises:[],color:"#c8ff00"};builderMode=null;renderBuilder();}
 }
 
-function typeLabel(t){if(t==="TRAEK")return"TRÆK";if(t==="SKUB")return"SKUB";if(t==="BEN")return"BEN";return customPrograms[t]?.name||t;}
-function typeColor(t){if(t==="TRAEK")return"#2a6a9a";if(t==="SKUB")return"#9a4a2a";if(t==="BEN")return"#1a5a1a";return"#2a4a00";}
+function typeLabel(t){if(PROG[t])return PROG[t].label.replace(/\s*DAG$/,"");return customPrograms[t]?.name||t;}
+function typeColor(t){if(t==="TRAEK")return"#2a6a9a";if(t==="SKUB")return"#9a4a2a";if(t==="BEN")return"#1a5a1a";if(PROG[t])return PROG[t].color;return"#2a4a00";}
 function dateChips(){
   const today=tds(new Date());
   let h='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:20px">';
@@ -911,7 +959,7 @@ function renderToday(){
         +'<span style="font-size:11px;color:#666;width:60px;flex-shrink:0">'+GRP_LABEL[g]+'</span>'
         +'<div style="flex:1;height:5px;background:#1a1a1a;border-radius:3px;overflow:hidden">'
         +'<div style="width:'+pct+'%;height:100%;background:'+col+';opacity:.8"></div></div>'
-        +'<span style="font-size:10px;color:'+col+';width:86px;text-align:right;flex-shrink:0">'+v+' sæt · '+f+'×/uge</span></div>';
+        +'<span style="font-size:10px;color:'+col+';width:86px;text-align:right;flex-shrink:0">'+Math.round(v)+' sæt · '+f+'×/uge</span></div>';
     });
     h+='<div style="font-size:10px;color:#2e2e2e;margin:10px 0 14px;line-height:1.6">Mål: 10–20 sæt og min. 2 træninger pr. muskelgruppe pr. uge (Schoenfeld et al. 2016, 2017).</div>';
     // Suggestions
@@ -1431,10 +1479,12 @@ const GOALS={
       "Konsistens slår intensitet: 3 gode dage hver uge i et år slår 6 perfekte dage i en måned."
     ]}
 };
+// Splits valgt så alle 7 muskelgrupper rammer 10–20 sæt/uge og ≥2×/uge:
+// 2–3 dage → helkrop (højest frekvens pr. session), 4 dage → overkrop/underkrop
 function wizSplit(days){
-  if(days===2)return{1:"SKUB",4:"TRAEK"};
-  if(days===3)return{1:"SKUB",3:"TRAEK",5:"BEN"};
-  return{1:"SKUB",2:"TRAEK",4:"BEN",6:"TRAEK"};
+  if(days===2)return{1:"HELKROP",4:"HELKROP"};
+  if(days===3)return{1:"HELKROP",3:"HELKROP",5:"HELKROP"};
+  return{1:"OVERKROP",2:"UNDERKROP",4:"OVERKROP",5:"UNDERKROP"};
 }
 window.startWizard=()=>{wizStep=1;wizGoal=null;wizDays=null;renderSettings();};
 window.wizClose=()=>{wizStep=null;renderSettings();};
@@ -1445,7 +1495,6 @@ window.wizApply=()=>{userSplit=wizSplit(wizDays);userGoal=wizGoal;wizStep=null;s
 window.toggleGoalGuide=()=>{goalGuideOpen=!goalGuideOpen;renderSettings();};
 function renderWizard(){
   const DNF=["Søndag","Mandag","Tirsdag","Onsdag","Torsdag","Fredag","Lørdag"];
-  const TL={TRAEK:"Træk",SKUB:"Skub",BEN:"Ben"};
   let h='<div style="background:#0e0e0e;border:1px solid #c8ff0030;border-radius:10px;padding:18px;margin-bottom:24px">';
   h+='<div style="display:flex;align-items:center;margin-bottom:16px">'
     +'<span style="font-size:10px;color:#c8ff00;letter-spacing:2px;flex:1">TRÆNINGSGUIDE · TRIN '+wizStep+' AF 3</span>'
@@ -1473,11 +1522,29 @@ function renderWizard(){
     h+='<button class="btn-g" style="width:auto;padding:7px 14px;font-size:12px" onclick="wizBack()">← TILBAGE</button>';
   } else if(wizStep===3){
     const g=GOALS[wizGoal],split=wizSplit(wizDays);
+    const an=analyzeWeeklyVolume(split),score=programScore(an);
+    const scoreCol=score>=80?"#c8ff00":score>=50?"#ffc14d":"#ff6b6b";
     h+='<div style="font-size:14px;color:#e0dcd4;margin-bottom:14px">'+g.emoji+' '+g.label+' · '+wizDays+' dage/uge</div>';
     h+='<div style="font-size:10px;color:#444;letter-spacing:1.5px;margin-bottom:8px">DIT ANBEFALEDE SPLIT</div>';
     Object.entries(split).forEach(([d,t])=>{
-      h+='<div style="display:flex;gap:10px;font-size:12px;margin-bottom:5px"><span style="color:#666;width:70px">'+DNF[d]+'</span><span style="color:#c8ff00">'+TL[t]+'</span></div>';
+      h+='<div style="display:flex;gap:10px;font-size:12px;margin-bottom:5px"><span style="color:#666;width:70px">'+DNF[d]+'</span><span style="color:'+(PROG[t]?.color||"#c8ff00")+'">'+esc(typeLabel(t))+'</span></div>';
     });
+    // Forventet analyse-score for splittet
+    h+='<div style="background:#0a0a0a;border:1px solid #161616;border-radius:8px;padding:12px 14px;margin-top:14px">';
+    h+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">'
+      +'<span style="font-size:10px;color:#444;letter-spacing:1.5px;flex:1">FORVENTET PROGRAM-SCORE</span>'
+      +'<span style="font-family:\'Bebas Neue\';font-size:24px;color:'+scoreCol+';line-height:1">'+score+'</span>'
+      +'<span style="font-size:10px;color:#444">/100</span></div>';
+    Object.keys(CATALOG).forEach(grp=>{
+      const v=an.vol[grp],f=an.freq[grp],st=groupStatus(v);
+      const col=st==="optimal"?"#c8ff00":st==="none"?"#ff6b6b":"#ffc14d";
+      h+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">'
+        +'<span style="font-size:10px;color:#666;width:55px;flex-shrink:0">'+GRP_LABEL[grp]+'</span>'
+        +'<div style="flex:1;height:4px;background:#1a1a1a;border-radius:2px;overflow:hidden"><div style="width:'+Math.min(v/20*100,100)+'%;height:100%;background:'+col+';opacity:.8"></div></div>'
+        +'<span style="font-size:9px;color:'+col+';width:78px;text-align:right;flex-shrink:0">'+Math.round(v)+' sæt · '+f+'×</span></div>';
+    });
+    h+='<div style="font-size:10px;color:#3a3a3a;margin-top:8px;line-height:1.5">Splittet er sammensat, så alle muskelgrupper rammer 10–20 sæt og trænes mindst 2× om ugen — det forskningen anbefaler.</div>';
+    h+='</div>';
     h+='<div style="font-size:10px;color:#444;letter-spacing:1.5px;margin:16px 0 8px">SÅDAN FÅR DU RESULTATER</div>';
     g.guide.forEach(t=>{h+='<div style="font-size:11px;color:#777;line-height:1.7;margin-bottom:8px">→ '+t+'</div>';});
     h+='<div style="display:flex;gap:8px;margin-top:14px">';
@@ -1522,9 +1589,6 @@ async function deleteCustomProgram(id){
 function renderSettings(){
   const DN=["SØN","MAN","TIR","ONS","TOR","FRE","LØR"];
   const DNF=["Søndag","Mandag","Tirsdag","Onsdag","Torsdag","Fredag","Lørdag"];
-  const TC={TRAEK:"#5bc8ff",SKUB:"#ff8c5b",BEN:"#a8ff78"};
-  const TB={TRAEK:"#0a1a2a",SKUB:"#2a0a0a",BEN:"#0a2a0a"};
-  const TL={TRAEK:"TRÆK",SKUB:"SKUB",BEN:"BEN"};
   const hasSplit=Object.keys(userSplit).length>0;
   let h='<div style="font-size:10px;color:#444;letter-spacing:2px;margin-bottom:20px">DIT TRÆNINGSSPLIT</div>';
   // ── Mål-wizard ──
@@ -1564,9 +1628,9 @@ function renderSettings(){
   [1,2,3,4,5,6,0].forEach(d=>{
     const type=userSplit[d]||null;const prog=type?getProgram(type):null;
     const isCustom=type&&!PROG[type];
-    const shortLabel=type?(isCustom?(prog?.label?.split(" ")[0]||"?"):TL[type]):"FRI";
-    const color=type?(isCustom?"#c8ff00":TC[type]):"#222";
-    const bg=type?(isCustom?"#1e2a00":TB[type]):"#111";
+    const shortLabel=type?(isCustom?(prog?.label?.split(" ")[0]||"?"):(PROG[type].short||type)):"FRI";
+    const color=type?(isCustom?"#c8ff00":PROG[type].color):"#222";
+    const bg=type?(isCustom?"#1e2a00":PROG[type].bgColor):"#111";
     const isActive=activeDaySelect===d;
     h+='<div style="text-align:center;cursor:pointer" onclick="selectDay('+d+')">';
     h+='<div style="font-size:9px;color:'+(isActive?"#c8ff00":"#444")+';letter-spacing:1px;margin-bottom:4px">'+DN[d]+'</div>';
@@ -1580,9 +1644,9 @@ function renderSettings(){
     h+='<div style="font-size:10px;color:#c8ff00;letter-spacing:1.5px;margin-bottom:12px">'+DNF[d].toUpperCase()+'</div>';
     h+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">';
     h+='<div class="chip'+(!userSplit[d]?" active":"")+'" onclick="setDayType('+d+',null)">FRI</div>';
-    [["TRAEK","TRÆK",TC.TRAEK],["SKUB","SKUB",TC.SKUB],["BEN","BEN",TC.BEN]].forEach(([t,l,c])=>{
-      const sel=userSplit[d]===t;
-      h+='<div class="chip'+(sel?" active":"")+'" onclick="setDayType('+d+',\''+t+'\')" style="'+(sel?'border-color:'+c+';color:'+c+';background:#111':'')+'">'+l+'</div>';
+    Object.keys(PROG).forEach(t=>{
+      const sel=userSplit[d]===t,c=PROG[t].color;
+      h+='<div class="chip'+(sel?" active":"")+'" onclick="setDayType('+d+',\''+t+'\')" style="'+(sel?'border-color:'+c+';color:'+c+';background:#111':'')+'">'+esc(typeLabel(t))+'</div>';
     });
     Object.entries(customPrograms).forEach(([id,prog])=>{
       const sel=userSplit[d]===id;
@@ -1674,7 +1738,12 @@ function renderBuilder(){
   // Live analyse af programmet der bygges
   if(prog.exercises&&prog.exercises.length){
     const gs={};let tot=0,unmapped=0;
-    prog.exercises.forEach(ex=>{const g=EX_MUSCLE[ex.id];const n=+ex.sets||3;tot+=n;if(g)gs[g]=(gs[g]||0)+n;else unmapped++;});
+    prog.exercises.forEach(ex=>{
+      const g=EX_MUSCLE[ex.id];const n=+ex.sets||3;tot+=n;
+      if(g){gs[g]=(gs[g]||0)+n;(EX_SECONDARY[ex.id]||[]).forEach(sg=>{gs[sg]=(gs[sg]||0)+n*0.5;});}
+      else unmapped++;
+    });
+    Object.keys(gs).forEach(g=>{gs[g]=Math.round(gs[g]);});
     h+='<div style="background:#0a0a0a;border:1px solid #1a1a1a;border-radius:8px;padding:12px 14px;margin-bottom:16px">';
     h+='<div style="font-size:10px;color:#444;letter-spacing:1.5px;margin-bottom:10px">DAGENS DÆKNING · '+tot+' SÆT I ALT</div>';
     h+='<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:4px">';

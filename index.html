@@ -152,6 +152,13 @@ input:focus,textarea:focus{border-color:#c8ff00!important}
   </div>
 </div>
 
+<!-- HVILETIMER -->
+<div id="resttimer" style="display:none;position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:300;background:#1e2a00;border:1px solid #c8ff0060;border-radius:30px;padding:10px 22px;align-items:center;gap:12px;box-shadow:0 4px 20px rgba(0,0,0,.5)">
+  <span style="font-size:11px;color:#888;letter-spacing:1px">HVIL</span>
+  <span id="resttime" style="font-family:'Bebas Neue';font-size:24px;color:#c8ff00;min-width:48px;text-align:center"></span>
+  <button onclick="stopRest()" style="background:none;border:none;color:#555;cursor:pointer;font-size:16px;padding:0">×</button>
+</div>
+
 <div id="sapp" style="display:none">
   <div style="padding:16px 20px 0;border-bottom:1px solid #1a1a1a">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
@@ -428,6 +435,94 @@ function generateSuggestions(covered,missing,an){
   return s;
 }
 
+// ── Stats, progression & PR helpers ───────────────────────────────────────────
+function maxWeightInSession(sess,exId){
+  const ex=(sess.exercises||[]).find(e=>e.id===exId);if(!ex)return 0;
+  return Math.max(0,...(ex.sets||[]).map(s=>parseFloat(s.weight)||0));
+}
+function exerciseHistory(exId){
+  return Object.entries(sessions)
+    .filter(([,s])=>(s.exercises||[]).some(e=>e.id===exId&&(e.sets||[]).some(x=>x.weight)))
+    .sort(([a],[b])=>a.localeCompare(b))
+    .map(([d,s])=>({date:d,kg:maxWeightInSession(s,exId)}));
+}
+function allLoggedExercises(){
+  const m={};
+  Object.values(sessions).forEach(s=>(s.exercises||[]).forEach(e=>{
+    if((e.sets||[]).some(x=>x.weight))m[e.id]=e.name;
+  }));
+  return m;
+}
+function parseTopReps(repsStr){
+  if(!repsStr)return null;
+  const m=String(repsStr).match(/(\d+)\s*[–-]\s*(\d+)/);
+  if(m)return +m[2];
+  const n=String(repsStr).match(/^(\d+)$/);
+  return n?+n[1]:null;
+}
+function findPRs(){
+  const prs=[];
+  logEx.forEach(ex=>{
+    const cur=Math.max(0,...ex.sets.map(s=>parseFloat(s.weight)||0));
+    if(!cur)return;
+    let prev=0;
+    Object.entries(sessions).forEach(([d,s])=>{
+      if(d>=activeDate)return;
+      prev=Math.max(prev,maxWeightInSession(s,ex.id));
+    });
+    if(prev>0&&cur>prev)prs.push({name:ex.name,kg:cur,prevKg:prev});
+  });
+  return prs;
+}
+function weekStartOf(ds){ // mandag i ugen for ds
+  const d=new Date(ds+"T12:00:00");
+  d.setDate(d.getDate()-((d.getDay()+6)%7));
+  return tds(d);
+}
+function weeklySummary(){
+  const start=weekStartOf(tds(new Date()));
+  const e=new Date(start+"T12:00:00");e.setDate(e.getDate()+6);
+  const end=tds(e);
+  let done=0,sets=0,kg=0;
+  Object.entries(sessions).forEach(([d,s])=>{
+    if(d<start||d>end)return;
+    done++;
+    (s.exercises||[]).forEach(ex=>(ex.sets||[]).forEach(x=>{
+      if(x.reps||x.weight){sets++;kg+=(parseFloat(x.reps)||0)*(parseFloat(x.weight)||0);}
+    }));
+  });
+  return{done,sets,kg:Math.round(kg),planned:Object.keys(userSplit).length};
+}
+function weekStreak(){
+  const planned=Object.keys(userSplit).length;if(!planned)return 0;
+  let streak=0;
+  const ws=new Date(weekStartOf(tds(new Date()))+"T12:00:00");
+  ws.setDate(ws.getDate()-7);
+  for(let i=0;i<104;i++){
+    const start=tds(ws),e=new Date(ws);e.setDate(e.getDate()+6);
+    const cnt=Object.keys(sessions).filter(d=>d>=start&&d<=tds(e)).length;
+    if(cnt>=planned)streak++;else break;
+    ws.setDate(ws.getDate()-7);
+  }
+  if(weeklySummary().done>=planned)streak++;
+  return streak;
+}
+function detectDeload(){
+  const recent=Object.entries(sessions).sort(([a],[b])=>b.localeCompare(a)).slice(0,4);
+  const bad=recent.filter(([,s])=>s.rating==="darlig").length;
+  if(bad>=2)
+    return{txt:"Flere af dine seneste træninger er vurderet 'Dårlig'.",fix:"Overvej en deload-uge: samme øvelser, men 50–60% af normal vægt og volumen. En planlagt let uge genopbygger overskud og bryder ofte plateauer."};
+  for(const [id,name] of Object.entries(allLoggedExercises())){
+    const hist=exerciseHistory(id);
+    if(hist.length>=3){
+      const l3=hist.slice(-3);
+      if(l3[1].kg<=l3[0].kg&&l3[2].kg<=l3[0].kg)
+        return{txt:name+" er stagneret over de seneste 3 træninger ("+l3.map(h=>h.kg+" kg").join(" → ")+").",fix:"Plateau er normalt. Prøv en deload-uge (50–60% vægt) eller skift rep-skema — fx 12·10·8 med stigende vægt."};
+    }
+  }
+  return null;
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function getType(ds){
   return userSplit[new Date(ds+"T12:00:00").getDay()]||null;
@@ -456,7 +551,7 @@ const pill=t=>'<span class="pill '+(t==="TRAEK"?"pill-t":t==="SKUB"?"pill-s":"pi
 // ── State ─────────────────────────────────────────────────────────────────────
 let CU=null,sessions={},activeDate=tds(new Date()),userSplit={},customPrograms={};
 let curView="today",logEx=[],logNote="",openEx=null,unsubSess=null;
-let activeDaySelect=null,editingProgram=null,builderMode=null,catalogTab="RYG",logRating=null,logInfoEx=null;
+let activeDaySelect=null,editingProgram=null,builderMode=null,catalogTab="RYG",logRating=null,logInfoEx=null,progEx=null;
 let rapidApiKey=localStorage.getItem("loft_api_key")||"";
 let profiles={},activeProfile=null,histProfileId=null,selectedColor=null;
 const COLORS=["#c8ff00","#5bc8ff","#ff8c5b","#c85bff","#ff5b8c","#5bffc8","#ffd75b","#ff5b5b"];
@@ -464,7 +559,7 @@ const REP_SCHEMES=[[6,6,6],[8,8,8],[10,10,10],[12,10,8],[15,12,10],[5,5,5,5]];
 
 // ── Window-exposed handlers ───────────────────────────────────────────────────
 window.onReps   = (xi,si,el)=>{logEx[xi].sets[si].reps=el.value.replace(/[^0-9]/g,"");el.value=logEx[xi].sets[si].reps;scheduleAutoSave();};
-window.onKg     = (xi,si,el)=>{logEx[xi].sets[si].weight=el.value.replace(/[^0-9]/g,"");el.value=logEx[xi].sets[si].weight;scheduleAutoSave();};
+window.onKg     = (xi,si,el)=>{logEx[xi].sets[si].weight=el.value.replace(/[^0-9.,]/g,"").replace(",",".");el.value=logEx[xi].sets[si].weight;scheduleAutoSave();};
 window.onNote   = el=>{logNote=el.value;};
 window.addSet   = xi=>{logEx[xi].sets.push(iSet());renderLog();};
 window.applyScheme = (xi,reps)=>{
@@ -476,6 +571,34 @@ window.rmSet    = (xi,si)=>{logEx[xi].sets.splice(si,1);renderLog();};
 window.saveLog    = saveLog;
 window.setLogRating = r=>{logRating=r;renderLog();};
 window.toggleLogInfo = id=>{logInfoEx=logInfoEx===id?null:id;renderLog();};
+window.setProgEx = id=>{progEx=id;renderHistory();};
+
+// ── Hviletimer ────────────────────────────────────────────────────────────────
+let restInterval=null,restEnd=0;
+function startRest(sec){
+  clearInterval(restInterval);
+  restEnd=Date.now()+sec*1000;
+  document.getElementById("resttimer").style.display="flex";
+  const tick=()=>{
+    const left=Math.ceil((restEnd-Date.now())/1000);
+    if(left<=0){
+      stopRest();
+      if(navigator.vibrate)navigator.vibrate([200,100,200]);
+      try{
+        const ctx=new (window.AudioContext||window.webkitAudioContext)();
+        const o=ctx.createOscillator(),g=ctx.createGain();
+        o.connect(g);g.connect(ctx.destination);
+        o.frequency.value=880;g.gain.value=.15;
+        o.start();o.stop(ctx.currentTime+.35);
+      }catch(e){}
+      return;
+    }
+    document.getElementById("resttime").textContent=Math.floor(left/60)+":"+String(left%60).padStart(2,"0");
+  };
+  tick();restInterval=setInterval(tick,250);
+}
+function stopRest(){clearInterval(restInterval);restInterval=null;document.getElementById("resttimer").style.display="none";}
+window.startRest=startRest;window.stopRest=stopRest;
 window.toggleEx = id=>{openEx=openEx===id?null:id;renderProgram();};
 window.setDate  = ds=>{activeDate=ds;if(curView==="program")renderProgram();else if(curView==="log"){initLog();renderLog();}};
 window.showView = showView;
@@ -753,11 +876,21 @@ function renderToday(){
     h+='<div class="sbox"><div style="font-family:\'Bebas Neue\';font-size:32px;color:#c8ff00;line-height:1">'+v+'</div><div style="font-size:10px;color:#444;letter-spacing:1.5px;margin-top:3px">'+l.toUpperCase()+'</div></div>';
   });
   h+='</div></div>';
+  // ── Denne uge + streak ──
+  const wk=weeklySummary(),streak=weekStreak();
+  h+='<div style="margin-bottom:24px"><div style="font-size:10px;color:#444;letter-spacing:2px;margin-bottom:10px">DENNE UGE</div>';
+  h+='<div class="sbox" style="display:flex;align-items:center;gap:16px;padding:14px 16px">';
+  h+='<div style="flex:1"><div style="font-size:13px;color:#e0dcd4">'+wk.done+' af '+wk.planned+' træninger</div>';
+  h+='<div style="font-size:11px;color:#555;margin-top:3px">'+wk.sets+' sæt · '+wk.kg.toLocaleString("da-DK")+' kg løftet</div></div>';
+  if(streak>0)h+='<div style="text-align:center;flex-shrink:0"><div style="font-size:20px;line-height:1">🔥</div><div style="font-size:10px;color:#c8ff00;letter-spacing:1px;margin-top:3px">'+streak+' UGE'+(streak>1?"R":"")+'</div></div>';
+  h+='</div></div>';
   if(isTrain)h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:24px"><button class="btn-g" onclick="activeDate=\''+today+'\';showView(\'program\')">SE PROGRAM →</button><button class="btn-p" onclick="activeDate=\''+today+'\';showView(\'log\')">LOG TRÆNING →</button></div>';
   // ── Analyse ──
   if(Object.keys(userSplit).length){
     const {covered,missing,an}=analyzeWeeklyMuscles();
     const suggestions=generateSuggestions(covered,missing,an);
+    const dl=detectDeload();
+    if(dl)suggestions.unshift({lvl:"warn",txt:dl.txt,fix:dl.fix});
     const score=programScore(an);
     const scoreCol=score>=80?"#c8ff00":score>=50?"#ffc14d":"#ff6b6b";
     h+='<div style="margin-bottom:24px">';
@@ -852,6 +985,11 @@ function renderLog(){
     +'<span style="font-size:11px;color:#444;flex:1">'+cap(fmtDate(activeDate))+'</span>'
     +'<span id="autosavelbl" style="font-size:10px;color:#2a4a00;letter-spacing:1px"></span>'
     +'</div>';
+  // Forrige session af samme type — til progressive overload-forslag
+  const prevSess=Object.entries(sessions)
+    .filter(([d,s])=>s.type===type&&d<activeDate)
+    .sort(([a],[b])=>b.localeCompare(a))[0]?.[1];
+  const prevMap={};if(prevSess)(prevSess.exercises||[]).forEach(e=>{prevMap[e.id]=e;});
   logEx.forEach((ex,xi)=>{
     const def=p.ex.find(e=>e.id===ex.id)||{};
     const isFirst=xi===0,isLast=xi===logEx.length-1;
@@ -872,6 +1010,19 @@ function renderLog(){
         +(def.tip?'<div><div style="font-size:9px;color:#444;letter-spacing:1.5px;margin-bottom:3px">TEKNIK</div><div style="font-size:11px;color:#888;line-height:1.7">'+esc(def.tip)+'</div></div>':"")
         +'</div>';
     }
+    // Progressive overload-forslag: ramte alle arbejdssæt toppen af rep-målet sidst?
+    if(!def.isTime){
+      const top=parseTopReps(def.reps);
+      const prevEx=prevMap[ex.id];
+      if(top&&prevEx){
+        const working=(prevEx.sets||[]).filter(s=>s.weight&&s.reps);
+        if(working.length&&working.every(s=>(parseFloat(s.reps)||0)>=top)){
+          const maxKg=Math.max(...working.map(s=>parseFloat(s.weight)||0));
+          const next=(maxKg+2.5).toLocaleString("da-DK");
+          h+='<div style="background:#131a00;border:1px solid #c8ff0030;border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:11px;color:#9ac800;line-height:1.6">💪 Sidst ramte du '+top+'+ reps på alle sæt med '+maxKg.toLocaleString("da-DK")+' kg — prøv <b style="color:#c8ff00">'+next+' kg</b> i dag.</div>';
+        }
+      }
+    }
     if(!def.isTime){
       h+='<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px">';
       h+='<span style="font-size:9px;color:#333;letter-spacing:1px;align-self:center;margin-right:2px">SKEMA</span>';
@@ -887,11 +1038,16 @@ function renderLog(){
       h+='<div style="display:grid;grid-template-columns:28px 1fr 1fr 28px;gap:5px;margin-bottom:5px;align-items:center">'
         +'<span style="font-size:11px;color:#333;text-align:center">S'+(si+1)+'</span>'
         +'<input class="sinput" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="—" value="'+esc(set.reps)+'" oninput="onReps('+xi+','+si+',this)">'
-        +'<input class="sinput" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="—" value="'+esc(set.weight)+'" oninput="onKg('+xi+','+si+',this)">'
+        +'<input class="sinput" type="text" inputmode="decimal" placeholder="—" value="'+esc(set.weight)+'" oninput="onKg('+xi+','+si+',this)">'
         +'<button class="rmb" onclick="rmSet('+xi+','+si+')">×</button></div>';
     });
-    h+='<button class="asb" onclick="addSet('+xi+')">+ SÆT</button></div>';
+    const restSec=parseInt(def.rest)||60;
+    h+='<div style="display:flex;gap:6px;margin-top:4px">'
+      +'<button class="asb" style="margin-top:0;flex:1" onclick="addSet('+xi+')">+ SÆT</button>'
+      +'<button class="asb" style="margin-top:0;flex:1" onclick="startRest('+restSec+')">⏱ HVIL '+restSec+'s</button>'
+      +'</div></div>';
   });
+  h+='<div id="prbanner"></div>';
   h+='<textarea class="field" placeholder="Note til træningen (valgfrit)..." rows="2" style="resize:vertical;margin-bottom:16px;color:#777" oninput="onNote(this)">'+esc(logNote)+'</textarea>';
   h+='<div style="margin-bottom:14px"><div style="font-size:10px;color:#444;letter-spacing:1.5px;margin-bottom:10px">VURDERING AF TRÆNINGEN</div><div style="display:flex;gap:8px">';
   [["god","GOD","#c8ff00","#1e2a00"],["ok","OK","#aaa","#1a1a1a"],["darlig","DÅRLIG","#ff6b6b","#2a0808"]].forEach(([v,l,c,bg])=>{
@@ -1013,6 +1169,14 @@ async function saveLog(silent=false){
   if(lbl)lbl.textContent="Gemt ✓";
   setTimeout(()=>{const l=document.getElementById("autosavelbl");if(l)l.textContent="";},2000);
   if(!silent&&btn){btn.textContent="Gemt ✓";setTimeout(()=>{if(btn){btn.disabled=false;btn.textContent="GEM TRÆNING";}},2000);}
+  if(!silent){
+    const prs=findPRs();
+    if(prs.length){
+      const el=document.getElementById("prbanner");
+      if(el)el.innerHTML=prs.map(pr=>'<div style="background:#1e2a00;border:1px solid #c8ff0050;border-radius:8px;padding:12px 14px;margin-bottom:8px;font-size:12px;color:#c8ff00">🏆 NY PR: '+esc(pr.name)+' — '+pr.kg.toLocaleString("da-DK")+' kg (før: '+pr.prevKg.toLocaleString("da-DK")+' kg)</div>').join('');
+      if(navigator.vibrate)navigator.vibrate([100,50,100]);
+    }
+  }
   if(!silent&&logRating==="darlig")setTimeout(()=>showView("today"),1200);
 }
 
@@ -1026,6 +1190,37 @@ function renderHistory(){
       h+='<span class="chip'+(act?" active":"")+'" onclick="switchHist(\''+id+'\')">'+esc(p.name)+'</span>';
     });
     h+='</div>';
+  }
+  // ── Fremgang (kun egen profil) ──
+  if(histProfileId===activeProfile?.id){
+    const exMap=allLoggedExercises();
+    const exIds=Object.keys(exMap);
+    if(exIds.length){
+      if(!progEx||!exMap[progEx])progEx=exIds[0];
+      h+='<div style="margin-bottom:24px"><div style="font-size:10px;color:#444;letter-spacing:2px;margin-bottom:10px">FREMGANG</div>';
+      h+='<div style="margin-bottom:12px">';
+      exIds.forEach(id=>{h+='<span class="chip'+(id===progEx?" active":"")+'" onclick="setProgEx(\''+id+'\')">'+esc(exMap[id])+'</span>';});
+      h+='</div>';
+      const hist=exerciseHistory(progEx);
+      if(hist.length){
+        const maxKg=Math.max(...hist.map(pt=>pt.kg));
+        const recent=hist.slice(-10);
+        h+='<div style="display:flex;align-items:stretch;gap:4px;height:110px;background:#0a0a0a;border:1px solid #161616;border-radius:8px;padding:10px">';
+        recent.forEach(pt=>{
+          const pct=maxKg?Math.max(pt.kg/maxKg*70,4):4;
+          const isPR=pt.kg===maxKg;
+          h+='<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:3px">'
+            +'<span style="font-size:9px;color:'+(isPR?"#c8ff00":"#555")+'">'+pt.kg.toLocaleString("da-DK")+'</span>'
+            +'<div style="width:100%;max-width:30px;height:'+pct+'%;background:'+(isPR?"#c8ff00":"#2a4a00")+';border-radius:3px 3px 0 0"></div>'
+            +'<span style="font-size:8px;color:#333">'+pt.date.slice(5).split("-").reverse().join("/")+'</span></div>';
+        });
+        h+='</div>';
+        h+='<div style="font-size:10px;color:#444;margin-top:6px">Maks vægt pr. session · PR: <span style="color:#c8ff00">'+maxKg.toLocaleString("da-DK")+' kg</span></div>';
+      } else {
+        h+='<div style="font-size:11px;color:#333">Log træninger med vægt for at se din fremgang her.</div>';
+      }
+      h+='</div>';
+    }
   }
   h+='<div id="hcontent"></div>';
   document.getElementById("vhistory").innerHTML=h;

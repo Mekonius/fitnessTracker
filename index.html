@@ -669,6 +669,24 @@ window.showCatalog=showCatalog;
 window.showCustomForm=showCustomForm;
 window.setCatalogTab=setCatalogTab;
 window.addCatalogEx=addCatalogEx;
+window.showCloneList=()=>{builderMode=builderMode==="clone"?null:"clone";renderBuilder();};
+window.builderLoadFrom=t=>{
+  const nameEl=document.getElementById("progname");
+  if(editingProgram&&nameEl)editingProgram.name=nameEl.value.trim();
+  const p=getProgram(t);if(!p)return;
+  if(!editingProgram)editingProgram={name:"",exercises:[],color:"#c8ff00"};
+  p.ex.forEach(ex=>{
+    if(!editingProgram.exercises.some(e=>e.id===ex.id))
+      editingProgram.exercises.push({...ex});
+  });
+  if(!editingProgram.name)editingProgram.name=typeLabel(t)+" (kopi)";
+  builderMode=null;renderBuilder();
+};
+window.cloneProgram=id=>{
+  const p=getProgram(id);if(!p)return;
+  editingProgram={name:typeLabel(id)+" (kopi)",color:"#c8ff00",exercises:p.ex.map(ex=>({...ex}))};
+  builderMode=null;showView("builder");
+};
 window.removeBuilderEx=removeBuilderEx;
 window.addCustomEx=addCustomEx;
 window.saveCustomProgram=saveCustomProgram;
@@ -1663,6 +1681,7 @@ function renderSettings(){
       h+='<div class="hrow" style="display:flex;align-items:center;gap:10px">';
       h+='<div style="flex:1"><div style="font-size:13px;color:#e0dcd4">'+esc(prog.name)+'</div>';
       h+='<div style="font-size:11px;color:#444;margin-top:2px">'+(prog.exercises||[]).length+' øvelser</div></div>';
+      h+='<button class="btn-g" style="width:auto;padding:6px 12px;font-size:11px" onclick="cloneProgram(\''+id+'\')">KOPIÉR</button>';
       h+='<button class="btn-g" style="width:auto;padding:6px 12px;font-size:11px" onclick="editProgram(\''+id+'\')">REDIGER</button>';
       h+='<button class="rmb" onclick="deleteCustomProgram(\''+id+'\')">×</button>';
       h+='</div>';
@@ -1763,9 +1782,10 @@ function renderBuilder(){
     if(!hints.length)h+='<div style="font-size:11px;color:#2a5a2a;margin-top:8px">Fornuftig session-struktur. Den samlede uge-analyse ser du under Overblik.</div>';
     h+='</div>';
   }
-  h+='<div style="display:flex;gap:8px;margin-bottom:16px">';
-  h+='<button class="'+(builderMode==="catalog"?"btn-p":"btn-g")+'" style="flex:1" onclick="showCatalog()">+ FRA KATALOG</button>';
-  h+='<button class="'+(builderMode==="custom"?"btn-p":"btn-g")+'" style="flex:1" onclick="showCustomForm()">+ EGEN ØVELSE</button>';
+  h+='<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">';
+  h+='<button class="'+(builderMode==="catalog"?"btn-p":"btn-g")+'" style="flex:1;min-width:100px;font-size:13px" onclick="showCatalog()">+ KATALOG</button>';
+  h+='<button class="'+(builderMode==="custom"?"btn-p":"btn-g")+'" style="flex:1;min-width:100px;font-size:13px" onclick="showCustomForm()">+ EGEN ØVELSE</button>';
+  h+='<button class="'+(builderMode==="clone"?"btn-p":"btn-g")+'" style="flex:1;min-width:100px;font-size:13px" onclick="showCloneList()">⧉ FRA PROGRAM</button>';
   h+='</div>';
   if(builderMode==="catalog"){
     const groups=Object.keys(CATALOG);
@@ -1793,6 +1813,18 @@ function renderBuilder(){
     h+='<div><div style="font-size:10px;color:#444;margin-bottom:4px">HVIL</div><input id="cex-rest" class="sinput" type="text" placeholder="60s" value="60s"/></div>';
     h+='</div>';
     h+='<button class="btn-g" style="width:auto;padding:8px 16px" onclick="addCustomEx()">TILFØJ ØVELSE</button></div>';
+  } else if(builderMode==="clone"){
+    h+='<div style="background:#0a0a0a;border:1px solid #1a1a1a;border-radius:8px;padding:14px;margin-bottom:16px">';
+    h+='<div style="font-size:10px;color:#444;letter-spacing:1.5px;margin-bottom:8px">KOPIÉR ØVELSER FRA</div>';
+    h+='<div style="font-size:11px;color:#555;margin-bottom:12px;line-height:1.6">Tilføjer programmets øvelser til dit — øvelser du allerede har, springes over.</div>';
+    Object.keys(PROG).forEach(t=>{
+      h+='<div class="chip" onclick="builderLoadFrom(\''+t+'\')" style="border-color:'+PROG[t].color+'40;color:'+PROG[t].color+'">'+esc(typeLabel(t))+' · '+PROG[t].ex.length+' øvelser</div>';
+    });
+    Object.entries(customPrograms).forEach(([id,cp])=>{
+      if(editingProgram?.id===id)return;
+      h+='<div class="chip" onclick="builderLoadFrom(\''+id+'\')">'+esc(cp.name)+' · '+(cp.exercises||[]).length+' øvelser</div>';
+    });
+    h+='</div>';
   }
   h+='<button class="btn-p" onclick="saveCustomProgram()">'+(prog.id?"GEM ÆNDRINGER":"OPRET PROGRAM")+'</button>';
   document.getElementById("vbuilder").innerHTML=h;

@@ -79,7 +79,7 @@ input:focus,textarea:focus{border-color:#c8ff00!important}
         <div style="margin-bottom:32px;display:flex;flex-direction:column;gap:20px">
           <div style="display:flex;gap:14px;align-items:flex-start">
             <div style="width:32px;height:32px;border:1px solid #c8ff0040;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:'Bebas Neue';color:#c8ff00;font-size:14px">1</div>
-            <div><div style="font-size:13px;color:#e0dcd4;margin-bottom:3px">Sæt dit split op</div><div style="font-size:12px;color:#444;line-height:1.6">Vælg hvilke dage du træner og hvilket program — PPL, Push/Pull eller dit eget.</div></div>
+            <div><div style="font-size:13px;color:#e0dcd4;margin-bottom:3px">Sæt din plan op</div><div style="font-size:12px;color:#444;line-height:1.6">Vælg hvilke dage du træner og hvilket program — PPL, Push/Pull eller dit eget.</div></div>
           </div>
           <div style="display:flex;gap:14px;align-items:flex-start">
             <div style="width:32px;height:32px;border:1px solid #c8ff0040;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:'Bebas Neue';color:#c8ff00;font-size:14px">2</div>
@@ -182,7 +182,7 @@ input:focus,textarea:focus{border-color:#c8ff00!important}
       <button class="tab"        id="nav-program" onclick="showView('program')">Program</button>
       <button class="tab"        id="nav-log"     onclick="showView('log')">Log</button>
       <button class="tab"        id="nav-history" onclick="showView('history')">Historik</button>
-      <button class="tab"        id="nav-settings" onclick="showView('settings')">Split</button>
+      <button class="tab"        id="nav-settings" onclick="showView('settings')">Plan</button>
     </div>
   </div>
   <div style="padding:20px;max-width:640px;margin:0 auto">
@@ -461,9 +461,9 @@ function analyzeWeeklyMuscles(){
 function generateSuggestions(covered,missing,an){
   const s=[];
   if(missing.includes("BEN"))
-    s.push({lvl:"warn",txt:"Du træner aldrig ben — quadriceps, baglår og glutes får ingen stimulus.",fix:"Tilføj en BEN-dag til dit split, eller inkluder squat/leg press i et eksisterende program."});
+    s.push({lvl:"warn",txt:"Du træner aldrig ben — quadriceps, baglår og glutes får ingen stimulus.",fix:"Tilføj en BEN-dag til din plan, eller inkluder squat/leg press i et eksisterende program."});
   if(missing.includes("RYG"))
-    s.push({lvl:"warn",txt:"Ingen rygtræning i dit split.",fix:"Tilføj træk-øvelser (Seated Row, Lat Pulldown) for at undgå muskel-ubalance og skulderskader."});
+    s.push({lvl:"warn",txt:"Ingen rygtræning i din plan.",fix:"Tilføj træk-øvelser (Seated Row, Lat Pulldown) for at undgå muskel-ubalance og skulderskader."});
   if(missing.includes("CORE"))
     s.push({lvl:"info",txt:"Ingen core-træning fundet i dine programmer.",fix:"Tilføj planke eller russian twist til et af dine eksisterende programmer."});
   Object.keys(CATALOG).forEach(g=>{
@@ -935,9 +935,9 @@ function renderToday(){
     document.getElementById("vtoday").innerHTML=
       '<div style="text-align:center;padding:48px 0">'
       +'<div style="font-size:32px;margin-bottom:16px">💪</div>'
-      +'<div style="font-size:14px;color:#e0dcd4;margin-bottom:8px">Sæt dit split op</div>'
-      +'<div style="font-size:12px;color:#444;line-height:1.8;margin-bottom:24px">Du har ikke valgt træningsdage endnu.<br>Gå til Split-fanen for at komme i gang.</div>'
-      +'<button class="btn-p" style="width:auto;padding:12px 28px" onclick="showView(\'settings\')">OPSÆT SPLIT →</button>'
+      +'<div style="font-size:14px;color:#e0dcd4;margin-bottom:8px">Sæt din plan op</div>'
+      +'<div style="font-size:12px;color:#444;line-height:1.8;margin-bottom:24px">Du har ikke valgt træningsdage endnu.<br>Gå til Plan-fanen for at komme i gang.</div>'
+      +'<button class="btn-p" style="width:auto;padding:12px 28px" onclick="showView(\'settings\')">OPSÆT PLAN →</button>'
       +'</div>';
     return;
   }
@@ -1540,7 +1540,7 @@ function renderWizard(){
   } else if(wizStep===2){
     const g=GOALS[wizGoal];
     h+='<div style="font-size:14px;color:#e0dcd4;margin-bottom:4px">Hvor mange dage om ugen kan du træne?</div>';
-    h+='<div style="font-size:11px;color:#555;margin-bottom:14px">Vær realistisk — et split du faktisk følger, slår et perfekt split du dropper.</div>';
+    h+='<div style="font-size:11px;color:#555;margin-bottom:14px">Vær realistisk — en plan du faktisk følger, slår en perfekt plan du dropper.</div>';
     h+='<div style="display:flex;gap:8px;margin-bottom:12px">';
     [2,3,4].forEach(d=>{
       const rec=g.recDays.includes(d);
@@ -1555,7 +1555,7 @@ function renderWizard(){
     const an=analyzeWeeklyVolume(split),score=programScore(an);
     const scoreCol=score>=80?"#c8ff00":score>=50?"#ffc14d":"#ff6b6b";
     h+='<div style="font-size:14px;color:#e0dcd4;margin-bottom:14px">'+g.emoji+' '+g.label+' · '+wizDays+' dage/uge</div>';
-    h+='<div style="font-size:10px;color:#444;letter-spacing:1.5px;margin-bottom:8px">DIT ANBEFALEDE SPLIT</div>';
+    h+='<div style="font-size:10px;color:#444;letter-spacing:1.5px;margin-bottom:8px">DIN ANBEFALEDE UGEPLAN</div>';
     Object.entries(split).forEach(([d,t])=>{
       h+='<div style="display:flex;gap:10px;font-size:12px;margin-bottom:5px"><span style="color:#666;width:70px">'+DNF[d]+'</span><span style="color:'+(PROG[t]?.color||"#c8ff00")+'">'+esc(typeLabel(t))+'</span></div>';
     });
@@ -1573,13 +1573,13 @@ function renderWizard(){
         +'<div style="flex:1;height:4px;background:#1a1a1a;border-radius:2px;overflow:hidden"><div style="width:'+Math.min(v/20*100,100)+'%;height:100%;background:'+col+';opacity:.8"></div></div>'
         +'<span style="font-size:9px;color:'+col+';width:78px;text-align:right;flex-shrink:0">'+Math.round(v)+' sæt · '+f+'×</span></div>';
     });
-    h+='<div style="font-size:10px;color:#3a3a3a;margin-top:8px;line-height:1.5">Splittet er sammensat, så alle muskelgrupper rammer 10–20 sæt og trænes mindst 2× om ugen — det forskningen anbefaler.</div>';
+    h+='<div style="font-size:10px;color:#3a3a3a;margin-top:8px;line-height:1.5">Planen er sammensat, så alle muskelgrupper rammer 10–20 sæt og trænes mindst 2× om ugen — det forskningen anbefaler.</div>';
     h+='</div>';
     h+='<div style="font-size:10px;color:#444;letter-spacing:1.5px;margin:16px 0 8px">SÅDAN FÅR DU RESULTATER</div>';
     g.guide.forEach(t=>{h+='<div style="font-size:11px;color:#777;line-height:1.7;margin-bottom:8px">→ '+t+'</div>';});
     h+='<div style="display:flex;gap:8px;margin-top:14px">';
     h+='<button class="btn-g" style="width:auto;padding:10px 16px;font-size:13px" onclick="wizBack()">← TILBAGE</button>';
-    h+='<button class="btn-p" style="flex:1" onclick="wizApply()">BRUG DETTE SPLIT →</button>';
+    h+='<button class="btn-p" style="flex:1" onclick="wizApply()">BRUG DENNE PLAN →</button>';
     h+='</div>';
   }
   return h+'</div>';
@@ -1620,7 +1620,7 @@ function renderSettings(){
   const DN=["SØN","MAN","TIR","ONS","TOR","FRE","LØR"];
   const DNF=["Søndag","Mandag","Tirsdag","Onsdag","Torsdag","Fredag","Lørdag"];
   const hasSplit=Object.keys(userSplit).length>0;
-  let h='<div style="font-size:10px;color:#444;letter-spacing:2px;margin-bottom:20px">DIT TRÆNINGSSPLIT</div>';
+  let h='<div style="font-size:10px;color:#444;letter-spacing:2px;margin-bottom:20px">DIN TRÆNINGSPLAN</div>';
   // ── Mål-wizard ──
   if(wizStep){
     h+=renderWizard();
@@ -1648,7 +1648,7 @@ function renderSettings(){
       h+='</div>';
     }
   }
-  if(!hasSplit)h+='<div style="font-size:13px;color:#555;margin-bottom:20px;line-height:1.8">Vælg et preset eller byg dit eget split — tryk på en dag for at vælge program.</div>';
+  if(!hasSplit)h+='<div style="font-size:13px;color:#555;margin-bottom:20px;line-height:1.8">Vælg et preset eller byg din egen plan — tryk på en dag for at vælge program.</div>';
   h+='<div style="margin-bottom:20px"><div style="font-size:10px;color:#444;letter-spacing:1.5px;margin-bottom:10px">HURTIG OPSÆTNING</div><div style="display:flex;gap:8px">';
   h+='<button class="btn-g" style="width:auto;padding:10px 18px" onclick="applyPreset(\'PPL\')">PPL · 3 dage</button>';
   h+='<button class="btn-g" style="width:auto;padding:10px 18px" onclick="applyPreset(\'PUSH/PULL\')">Push/Pull · 2 dage</button>';
@@ -1702,7 +1702,7 @@ function renderSettings(){
   }
   const trainDays=Object.keys(userSplit).length;
   if(trainDays)h+='<div style="font-size:11px;color:#555;margin-bottom:16px">'+trainDays+' træningsdage pr. uge</div>';
-  h+='<button class="btn-p"'+(trainDays?'':' disabled')+' onclick="saveSplit()">GEM SPLIT</button>';
+  h+='<button class="btn-p"'+(trainDays?'':' disabled')+' onclick="saveSplit()">GEM PLAN</button>';
   // Debug section — only visible to app owner
   if(CU&&CU.email==="kenneth.l.thomsen@gmail.com"){
     h+='<div style="margin-top:32px;padding-top:20px;border-top:1px solid #1a1a1a">'

@@ -357,6 +357,18 @@ function pickEx(id,sets){
   return null;
 }
 PROG.TRAEK.short="TRÆK";PROG.SKUB.short="SKUB";PROG.BEN.short="BEN";
+// Balanceret PPL: ben fordelt over ugen (baglår på træk-dag, accessories på
+// ben-dag) så alle muskelgrupper rammer 10–15 sæt og 2×/uge — i stedet for
+// 20 sæt ben på én dag og bryst på 7 sæt/uge.
+PROG.TRAEK.desc="Ryg, biceps og baglår — balanceret PPL";
+PROG.TRAEK.ex=[pickEx("seated_row",4),pickEx("lat_pulldown",4),pickEx("face_pull",2),
+  pickEx("romanian_dl",3),pickEx("bicep_curl",3),pickEx("plank",3)].filter(Boolean);
+PROG.SKUB.desc="Bryst, skulder og triceps — balanceret PPL";
+PROG.SKUB.ex=[pickEx("chest_press",4),pickEx("incline_press",3),pickEx("shoulder_press",3),
+  pickEx("upright_row",3),pickEx("tricep_pushdown",3),pickEx("russian_twist",3)].filter(Boolean);
+PROG.BEN.desc="Ben i moderat dosis + bryst- og arm-accessories";
+PROG.BEN.ex=[pickEx("squat",4),pickEx("leg_press",3),pickEx("leg_curl",3),pickEx("calf_raise",2),
+  pickEx("cable_fly",3),pickEx("hammer_curl",3),pickEx("skull_crusher",2),pickEx("leg_raise",2)].filter(Boolean);
 PROG.HELKROP={
   label:"HELKROP DAG",short:"HEL",color:"#ffd75b",bgColor:"#2a2200",
   desc:"Hele kroppen på én session — mest effektivt ved 2–3 dage/uge",

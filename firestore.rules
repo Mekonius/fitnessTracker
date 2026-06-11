@@ -1,0 +1,19 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Brugere kan KUN læse/skrive deres egne data (inkl. profiler, sessioner, vægt, programmer)
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Delt øvelses-cache (billeder/instruktioner): alle må læse, kun admin må skrive
+    match /exercises/{id} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.token.email == "kenneth.l.thomsen@gmail.com";
+    }
+  }
+}

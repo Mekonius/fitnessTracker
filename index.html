@@ -500,11 +500,19 @@ function maxWeightInSession(sess,exId){
   const ex=(sess.exercises||[]).find(e=>e.id===exId);if(!ex)return 0;
   return Math.max(0,...(ex.sets||[]).map(s=>parseFloat(s.weight)||0));
 }
-function exerciseHistory(exId){
+// Epley-formel: e1RM = vægt × (1 + reps/30) — estimeret 1-rep-max
+function maxE1RMInSession(sess,exId){
+  const ex=(sess.exercises||[]).find(e=>e.id===exId);if(!ex)return 0;
+  return Math.max(0,...(ex.sets||[]).map(s=>{
+    const w=parseFloat(s.weight)||0,r=parseFloat(s.reps)||0;
+    return w&&r?w*(1+r/30):0;
+  }));
+}
+function exerciseHistory(exId,mode){
   return Object.entries(sessions)
     .filter(([,s])=>(s.exercises||[]).some(e=>e.id===exId&&(e.sets||[]).some(x=>x.weight)))
     .sort(([a],[b])=>a.localeCompare(b))
-    .map(([d,s])=>({date:d,kg:maxWeightInSession(s,exId)}));
+    .map(([d,s])=>({date:d,kg:mode==="e1rm"?Math.round(maxE1RMInSession(s,exId)):maxWeightInSession(s,exId)}));
 }
 function allLoggedExercises(){
   const m={};
@@ -617,7 +625,7 @@ let CU=null,sessions={},activeDate=tds(new Date()),userSplit={},customPrograms={
 let curView="today",logEx=[],logNote="",openEx=null,unsubSess=null;
 let activeDaySelect=null,editingProgram=null,builderMode=null,catalogTab="RYG",logRating=null,logInfoEx=null,progEx=null;
 let wizStep=null,wizGoal=null,wizDays=null,userGoal=null,goalGuideOpen=false;
-let profiles={},activeProfile=null,histProfileId=null,selectedColor=null;
+let profiles={},activeProfile=null,histProfileId=null,selectedColor=null,weights={},progMode="kg";
 const COLORS=["#c8ff00","#5bc8ff","#ff8c5b","#c85bff","#ff5b8c","#5bffc8","#ffd75b","#ff5b5b"];
 const REP_SCHEMES=[[6,6,6],[8,8,8],[10,10,10],[12,10,8],[15,12,10],[5,5,5,5]];
 
@@ -636,6 +644,7 @@ window.saveLog    = saveLog;
 window.setLogRating = r=>{logRating=r;renderLog();};
 window.toggleLogInfo = id=>{logInfoEx=logInfoEx===id?null:id;renderLog();};
 window.setProgEx = id=>{progEx=id;renderHistory();};
+window.setProgMode = m=>{progMode=m;renderHistory();};
 
 // ── Hviletimer ────────────────────────────────────────────────────────────────
 let restInterval=null,restEnd=0;
@@ -655,11 +664,23 @@ function startRest(sec){
         o.frequency.value=880;g.gain.value=.15;
         o.start();o.stop(ctx.currentTime+.35);
       }catch(e){}
+      flashScreen(); // iOS har hverken vibration eller lyd uden gesture — blink i stedet
       return;
     }
     document.getElementById("resttime").textContent=Math.floor(left/60)+":"+String(left%60).padStart(2,"0");
   };
   tick();restInterval=setInterval(tick,250);
+}
+function flashScreen(){
+  const f=document.createElement("div");
+  f.style.cssText="position:fixed;inset:0;background:#c8ff00;z-index:9999;pointer-events:none;opacity:0;transition:opacity .15s";
+  document.body.appendChild(f);
+  let n=0;
+  const blink=()=>{
+    f.style.opacity=".5";
+    setTimeout(()=>{f.style.opacity="0";n++;if(n<3)setTimeout(blink,200);else setTimeout(()=>f.remove(),300);},180);
+  };
+  blink();
 }
 function stopRest(){clearInterval(restInterval);restInterval=null;document.getElementById("resttimer").style.display="none";}
 window.startRest=startRest;window.stopRest=stopRest;
@@ -700,6 +721,15 @@ window.cloneProgram=id=>{
   builderMode=null;showView("builder");
 };
 window.removeBuilderEx=removeBuilderEx;
+window.updBuilderEx=(i,f,el)=>{
+  if(!editingProgram?.exercises?.[i])return;
+  editingProgram.exercises[i][f]=f==="sets"?el.value.replace(/[^0-9]/g,""):el.value;
+};
+window.refreshBuilder=()=>{
+  const n=document.getElementById("progname");
+  if(editingProgram&&n)editingProgram.name=n.value;
+  renderBuilder();
+};
 window.addCustomEx=addCustomEx;
 window.saveCustomProgram=saveCustomProgram;
 window.selectProfile=selectProfile;
@@ -892,7 +922,25 @@ function startListen(){
     if(curView==="today")renderToday();
     if(curView==="history"&&histProfileId===activeProfile.id)renderHistContent(sessions);
   });
+  loadWeights();
 }
+async function loadWeights(){
+  weights={};
+  try{
+    const snap=await getDocs(collection(db,"users",CU.uid,"profiles",activeProfile.id,"weights"));
+    snap.forEach(d=>{weights[d.id]=d.data().kg;});
+    if(curView==="today")renderToday();
+  }catch(e){}
+}
+window.saveWeight=async()=>{
+  const el=document.getElementById("bw-input");
+  const kg=parseFloat((el?.value||"").replace(",","."));
+  if(!kg||kg<20||kg>400){if(el)el.value="";return;}
+  const today=tds(new Date());
+  weights[today]=kg;
+  setDoc(doc(db,"users",CU.uid,"profiles",activeProfile.id,"weights",today),{kg}).catch(()=>{});
+  renderToday();
+};
 function updateHdr(){
   const today=tds(new Date()),type=getType(today);
   document.getElementById("hdate").innerHTML=cap(fmtDate(today))+" — "
@@ -965,6 +1013,35 @@ function renderToday(){
   h+='<div style="flex:1"><div style="font-size:13px;color:#e0dcd4">'+wk.done+' af '+wk.planned+' træninger</div>';
   h+='<div style="font-size:11px;color:#555;margin-top:3px">'+wk.sets+' sæt · '+wk.kg.toLocaleString("da-DK")+' kg løftet</div></div>';
   if(streak>0)h+='<div style="text-align:center;flex-shrink:0"><div style="font-size:20px;line-height:1">🔥</div><div style="font-size:10px;color:#c8ff00;letter-spacing:1px;margin-top:3px">'+streak+' UGE'+(streak>1?"R":"")+'</div></div>';
+  h+='</div></div>';
+  // ── Kropsvægt ──
+  const wDates=Object.keys(weights).sort();
+  h+='<div style="margin-bottom:24px"><div style="font-size:10px;color:#444;letter-spacing:2px;margin-bottom:10px">KROPSVÆGT</div>';
+  h+='<div class="sbox" style="padding:14px 16px">';
+  if(wDates.length){
+    const last=weights[wDates[wDates.length-1]],first=weights[wDates[0]];
+    const diff=Math.round((last-first)*10)/10;
+    const goalCol=userGoal==="weight"?(diff<0?"#c8ff00":"#ff8080"):userGoal==="bulk"?(diff>0?"#c8ff00":"#ffc14d"):"#888";
+    h+='<div style="display:flex;align-items:baseline;gap:10px;margin-bottom:10px">'
+      +'<span style="font-family:\'Bebas Neue\';font-size:30px;color:#e0dcd4;line-height:1">'+last.toLocaleString("da-DK")+' kg</span>'
+      +(wDates.length>1?'<span style="font-size:11px;color:'+goalCol+'">'+(diff>0?"+":"")+diff.toLocaleString("da-DK")+' kg siden start</span>':"")
+      +'</div>';
+    const recent=wDates.slice(-12);
+    const vals=recent.map(d=>weights[d]);
+    const mn=Math.min(...vals),mx=Math.max(...vals),range=(mx-mn)||1;
+    h+='<div style="display:flex;align-items:flex-end;gap:3px;height:46px;margin-bottom:12px">';
+    recent.forEach(d=>{
+      const pct=20+((weights[d]-mn)/range)*80;
+      h+='<div style="flex:1;height:'+pct+'%;background:#2a4a00;border-radius:2px 2px 0 0" title="'+d+': '+weights[d]+' kg"></div>';
+    });
+    h+='</div>';
+  } else {
+    h+='<div style="font-size:11px;color:#444;margin-bottom:12px;line-height:1.6">Log din vægt for at følge udviklingen'+(userGoal==="weight"?" — uden den flyver dit vægttab-mål i blinde":"")+'.</div>';
+  }
+  h+='<div style="display:flex;gap:8px">'
+    +'<input id="bw-input" class="field" type="text" inputmode="decimal" placeholder="Vægt i kg..." style="flex:1;padding:9px 12px;font-size:13px"/>'
+    +'<button class="btn-g" style="width:auto;padding:9px 16px;font-size:12px" onclick="saveWeight()">GEM</button>'
+    +'</div>';
   h+='</div></div>';
   if(isTrain)h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:24px"><button class="btn-g" onclick="activeDate=\''+today+'\';showView(\'program\')">SE PROGRAM →</button><button class="btn-p" onclick="activeDate=\''+today+'\';showView(\'log\')">LOG TRÆNING →</button></div>';
   // ── Analyse ──
@@ -1283,7 +1360,11 @@ function renderHistory(){
       h+='<div style="margin-bottom:12px">';
       exIds.forEach(id=>{h+='<span class="chip'+(id===progEx?" active":"")+'" onclick="setProgEx(\''+id+'\')">'+esc(exMap[id])+'</span>';});
       h+='</div>';
-      const hist=exerciseHistory(progEx);
+      h+='<div style="margin-bottom:12px">'
+        +'<span class="chip'+(progMode==="kg"?" active":"")+'" onclick="setProgMode(\'kg\')">Maks kg</span>'
+        +'<span class="chip'+(progMode==="e1rm"?" active":"")+'" onclick="setProgMode(\'e1rm\')">e1RM</span>'
+        +'</div>';
+      const hist=exerciseHistory(progEx,progMode);
       if(hist.length){
         const maxKg=Math.max(...hist.map(pt=>pt.kg));
         const recent=hist.slice(-10);
@@ -1297,7 +1378,7 @@ function renderHistory(){
             +'<span style="font-size:8px;color:#333">'+pt.date.slice(5).split("-").reverse().join("/")+'</span></div>';
         });
         h+='</div>';
-        h+='<div style="font-size:10px;color:#444;margin-top:6px">Maks vægt pr. session · PR: <span style="color:#c8ff00">'+maxKg.toLocaleString("da-DK")+' kg</span></div>';
+        h+='<div style="font-size:10px;color:#444;margin-top:6px">'+(progMode==="e1rm"?"Estimeret 1-rep-max (Epley) · Bedste":"Maks vægt pr. session · PR")+': <span style="color:#c8ff00">'+maxKg.toLocaleString("da-DK")+' kg</span></div>';
       } else {
         h+='<div style="font-size:11px;color:#333">Log træninger med vægt for at se din fremgang her.</div>';
       }
@@ -1743,7 +1824,8 @@ async function saveCustomProgram(){
   if(!editingProgram)editingProgram={exercises:[],color:"#c8ff00"};
   editingProgram.name=name;
   const id=editingProgram.id||("prog_"+Date.now().toString(36)+Math.random().toString(36).slice(2,5));
-  const data={name:editingProgram.name,color:editingProgram.color||"#c8ff00",exercises:editingProgram.exercises||[]};
+  const data={name:editingProgram.name,color:editingProgram.color||"#c8ff00",
+    exercises:(editingProgram.exercises||[]).map(ex=>({...ex,sets:parseInt(ex.sets)||3,reps:String(ex.reps||"12"),rest:String(ex.rest||"60s")}))};
   await setDoc(doc(db,"users",CU.uid,"programs",id),data);
   customPrograms[id]=data;editingProgram=null;builderMode=null;showView("settings");
 }
@@ -1757,9 +1839,13 @@ function renderBuilder(){
   h+='<div style="margin-bottom:14px"><div style="font-size:10px;color:#444;letter-spacing:1.5px;margin-bottom:10px">ØVELSER ('+(prog.exercises||[]).length+')</div>';
   if(prog.exercises&&prog.exercises.length){
     (prog.exercises||[]).forEach((ex,i)=>{
-      h+='<div class="hrow" style="display:flex;align-items:center;gap:8px;margin-bottom:6px">';
-      h+='<div style="flex:1"><div style="font-size:13px;color:#e0dcd4">'+esc(ex.name)+'</div>';
-      h+='<div style="font-size:10px;color:#444">'+ex.sets+' sæt · '+esc(ex.reps)+' · '+esc(ex.rest)+'</div></div>';
+      h+='<div class="hrow" style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px">';
+      h+='<div style="flex:1;min-width:0"><div style="font-size:13px;color:#e0dcd4">'+esc(ex.name)+'</div>';
+      h+='<div style="display:flex;gap:10px;margin-top:8px;align-items:center;flex-wrap:wrap">'
+        +'<label style="display:flex;align-items:center;gap:5px"><input class="sinput" style="width:42px;font-size:12px;padding:5px" type="text" inputmode="numeric" value="'+esc(ex.sets)+'" oninput="updBuilderEx('+i+',\'sets\',this)" onchange="refreshBuilder()"/><span style="font-size:9px;color:#444;letter-spacing:1px">SÆT</span></label>'
+        +'<label style="display:flex;align-items:center;gap:5px"><input class="sinput" style="width:62px;font-size:12px;padding:5px" type="text" value="'+esc(ex.reps)+'" oninput="updBuilderEx('+i+',\'reps\',this)"/><span style="font-size:9px;color:#444;letter-spacing:1px">REPS</span></label>'
+        +'<label style="display:flex;align-items:center;gap:5px"><input class="sinput" style="width:52px;font-size:12px;padding:5px" type="text" value="'+esc(ex.rest)+'" oninput="updBuilderEx('+i+',\'rest\',this)"/><span style="font-size:9px;color:#444;letter-spacing:1px">HVIL</span></label>'
+        +'</div></div>';
       h+='<button class="rmb" onclick="removeBuilderEx('+i+')">×</button></div>';
     });
   } else {

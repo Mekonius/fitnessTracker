@@ -609,6 +609,12 @@ function getProgram(type){
   return null;
 }
 const buildDef=type=>{const p=getProgram(type);return p?p.ex.map(e=>({id:e.id,name:e.name,sets:Array.from({length:e.sets||3},iSet)})):[];};
+function catalogDef(id){
+  for(const exs of Object.values(CATALOG)){const e=exs.find(x=>x.id===id);if(e)return e;}
+  return null;
+}
+const isDeload=ds=>!!deloadUntil&&ds<=deloadUntil;
+const deloadKg=w=>{const v=parseFloat(w);return v?String(Math.max(Math.round(v*0.55/2.5)*2.5,2.5)):"";};
 function upcoming(n){
   const days=[],cur=new Date();let i=0;
   while(days.length<n&&i<90){const d=new Date(cur);d.setDate(d.getDate()+i);const ds=tds(d);const type=getType(ds);if(type)days.push({date:ds,type});i++;}
@@ -624,7 +630,7 @@ const pill=t=>{
 let CU=null,sessions={},activeDate=tds(new Date()),userSplit={},customPrograms={};
 let curView="today",logEx=[],logNote="",openEx=null,unsubSess=null;
 let activeDaySelect=null,editingProgram=null,builderMode=null,catalogTab="RYG",logRating=null,logInfoEx=null,progEx=null;
-let wizStep=null,wizGoal=null,wizDays=null,userGoal=null,goalGuideOpen=false;
+let wizStep=null,wizGoal=null,wizDays=null,userGoal=null,goalGuideOpen=false,swapEx=null,deloadUntil=null;
 let profiles={},activeProfile=null,histProfileId=null,selectedColor=null,weights={},progMode="kg";
 const COLORS=["#c8ff00","#5bc8ff","#ff8c5b","#c85bff","#ff5b8c","#5bffc8","#ffd75b","#ff5b5b"];
 const REP_SCHEMES=[[6,6,6],[8,8,8],[10,10,10],[12,10,8],[15,12,10],[5,5,5,5]];
@@ -643,6 +649,23 @@ window.rmSet    = (xi,si)=>{logEx[xi].sets.splice(si,1);renderLog();};
 window.saveLog    = saveLog;
 window.setLogRating = r=>{logRating=r;renderLog();};
 window.toggleLogInfo = id=>{logInfoEx=logInfoEx===id?null:id;renderLog();};
+window.toggleSwap = id=>{swapEx=swapEx===id?null:id;renderLog();};
+window.doSwap = (xi,newId)=>{
+  const alt=catalogDef(newId);if(!alt||!logEx[xi])return;
+  logEx[xi]={id:alt.id,name:alt.name,sets:Array.from({length:logEx[xi].sets.length||alt.sets||3},iSet)};
+  swapEx=null;logInfoEx=null;renderLog();scheduleAutoSave();
+};
+window.startDeload=async()=>{
+  const d=new Date();d.setDate(d.getDate()+7);
+  deloadUntil=tds(d);
+  setDoc(doc(db,"users",CU.uid,"settings","split"),{deloadUntil},{merge:true}).catch(()=>{});
+  renderToday();
+};
+window.endDeload=async()=>{
+  deloadUntil=null;
+  setDoc(doc(db,"users",CU.uid,"settings","split"),{deloadUntil:null},{merge:true}).catch(()=>{});
+  if(curView==="log"){initLog();renderLog();}else renderToday();
+};
 window.setProgEx = id=>{progEx=id;renderHistory();};
 window.setProgMode = m=>{progMode=m;renderHistory();};
 
@@ -1049,7 +1072,6 @@ function renderToday(){
     const {covered,missing,an}=analyzeWeeklyMuscles();
     const suggestions=generateSuggestions(covered,missing,an);
     const dl=detectDeload();
-    if(dl)suggestions.unshift({lvl:"warn",txt:dl.txt,fix:dl.fix});
     const score=programScore(an);
     const scoreCol=score>=80?"#c8ff00":score>=50?"#ffc14d":"#ff6b6b";
     h+='<div style="margin-bottom:24px">';
@@ -1069,6 +1091,18 @@ function renderToday(){
         +'<span style="font-size:10px;color:'+col+';width:86px;text-align:right;flex-shrink:0">'+Math.round(v)+' sæt · '+f+'×/uge</span></div>';
     });
     h+='<div style="font-size:10px;color:#2e2e2e;margin:10px 0 14px;line-height:1.6">Mål: 10–20 sæt og min. 2 træninger pr. muskelgruppe pr. uge (Schoenfeld et al. 2016, 2017).</div>';
+    // Deload-status / forslag
+    if(isDeload(tds(new Date()))){
+      h+='<div style="background:#1a1400;border:1px solid #ffd75b40;border-radius:8px;padding:14px 16px;margin-bottom:14px">'
+        +'<div style="font-size:12px;color:#ffd75b;margin-bottom:4px">🔋 DELOAD-UGE AKTIV</div>'
+        +'<div style="font-size:11px;color:#806020;line-height:1.6;margin-bottom:10px">Vægte foreslås til ca. 55% til og med '+cap(fmtDate(deloadUntil))+'. Fokus på teknik og restitution.</div>'
+        +'<button class="btn-g" style="width:auto;padding:7px 14px;font-size:11px" onclick="endDeload()">AFSLUT DELOAD</button></div>';
+    } else if(dl){
+      h+='<div style="background:#1a0808;border:1px solid #ff444430;border-radius:8px;padding:14px 16px;margin-bottom:14px">'
+        +'<div style="font-size:12px;color:#ff8080;margin-bottom:5px">'+esc(dl.txt)+'</div>'
+        +'<div style="font-size:11px;color:#555;line-height:1.6;margin-bottom:12px">→ '+esc(dl.fix)+'</div>'
+        +'<button class="btn-p" style="width:auto;padding:10px 18px;font-size:14px" onclick="startDeload()">START DELOAD-UGE →</button></div>';
+    }
     // Suggestions
     if(suggestions.length){
       suggestions.forEach(s=>{
@@ -1110,7 +1144,7 @@ function renderProgram(){
 
 function initLog(){
   const type=getType(activeDate);
-  logRating=null;logInfoEx=null;
+  logRating=null;logInfoEx=null;swapEx=null;
   if(!type){logEx=[];logNote="";return;}
   const existing=sessions[activeDate];
   if(existing){
@@ -1121,11 +1155,12 @@ function initLog(){
     .filter(([d,s])=>s.type===type&&d<activeDate)
     .sort(([a],[b])=>b.localeCompare(a))[0]?.[1];
   if(prev){
+    const dl=isDeload(activeDate);
     const prevMap={};(prev.exercises||[]).forEach(e=>{prevMap[e.id]=e;});
     logEx=buildDef(type).map(ex=>{
       const p=prevMap[ex.id];
       if(!p)return ex;
-      return{...ex,sets:p.sets.map(s=>({reps:s.reps||"",weight:s.weight||""}))};
+      return{...ex,sets:p.sets.map(s=>({reps:s.reps||"",weight:dl?deloadKg(s.weight):(s.weight||"")}))};
     });
   } else {
     logEx=buildDef(type);
@@ -1149,10 +1184,12 @@ function renderLog(){
     .filter(([d,s])=>s.type===type&&d<activeDate)
     .sort(([a],[b])=>b.localeCompare(a))[0]?.[1];
   const prevMap={};if(prevSess)(prevSess.exercises||[]).forEach(e=>{prevMap[e.id]=e;});
+  if(isDeload(activeDate))
+    h+='<div style="background:#1a1400;border:1px solid #ffd75b40;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:11px;color:#ffd75b;line-height:1.6">🔋 Deload-uge — vægte er sat til ca. 55%. Let og teknisk, slutter '+cap(fmtDate(deloadUntil))+'.</div>';
   logEx.forEach((ex,xi)=>{
-    const def=p.ex.find(e=>e.id===ex.id)||{};
+    const def=p.ex.find(e=>e.id===ex.id)||catalogDef(ex.id)||{};
     const isFirst=xi===0,isLast=xi===logEx.length-1;
-    const infoOpen=logInfoEx===ex.id;
+    const infoOpen=logInfoEx===ex.id,swapOpen=swapEx===ex.id;
     h+='<div class="excard" draggable="true" data-xi="'+xi+'">'
       +'<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:10px">'
       +'<div class="drag-handle" data-xi="'+xi+'">⠿</div>'
@@ -1160,8 +1197,26 @@ function renderLog(){
       +(def.muscles?'<div style="font-size:10px;color:'+p.color+';opacity:.7;margin-top:2px">'+esc(def.muscles)+'</div>':"")
       +(def.reps?'<div style="font-size:10px;color:#333;margin-top:2px">Mål: '+def.sets+' sæt · '+esc(def.reps)+' · '+def.rest+'</div>':"")
       +'</div>'
+      +(EX_MUSCLE[ex.id]?'<button class="rmb" style="font-size:14px;color:'+(swapOpen?p.color:"#3a3a3a")+';flex-shrink:0" onclick="toggleSwap(\''+ex.id+'\')" title="Byt øvelse">⇄</button>':"")
       +'<button class="rmb" style="font-size:15px;color:'+(infoOpen?p.color:"#3a3a3a")+';flex-shrink:0" onclick="toggleLogInfo(\''+ex.id+'\')" title="Sådan udføres øvelsen">ⓘ</button>'
       +'</div>';
+    if(swapOpen){
+      const grp=EX_MUSCLE[ex.id];
+      const alts=(CATALOG[grp]||[]).filter(e=>e.id!==ex.id&&!logEx.some(l=>l.id===e.id));
+      h+='<div style="background:#0c0c0c;border:1px solid #1e1e1e;border-radius:6px;padding:10px 12px;margin-bottom:12px">'
+        +'<div style="font-size:9px;color:#444;letter-spacing:1.5px;margin-bottom:6px">MASKINEN OPTAGET? BYT TIL ('+GRP_LABEL[grp]+')</div>';
+      if(alts.length){
+        alts.forEach(a=>{
+          h+='<div onclick="doSwap('+xi+',\''+a.id+'\')" style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #141414;cursor:pointer">'
+            +'<div style="flex:1;min-width:0"><div style="font-size:12px;color:#e0dcd4">'+esc(a.name)+'</div>'
+            +'<div style="font-size:10px;color:#444;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(a.machine||"")+'</div></div>'
+            +'<span style="color:#c8ff00;font-size:10px;letter-spacing:1px;flex-shrink:0">VÆLG</span></div>';
+        });
+      } else {
+        h+='<div style="font-size:11px;color:#444">Ingen ledige alternativer i denne muskelgruppe.</div>';
+      }
+      h+='</div>';
+    }
     if(infoOpen){
       h+='<div style="background:#0c0c0c;border:1px solid '+p.color+'22;border-radius:6px;padding:12px;margin-bottom:12px">'
         +'<div id="lgif-'+ex.id+'"></div>'
@@ -1170,7 +1225,7 @@ function renderLog(){
         +'</div>';
     }
     // Progressive overload-forslag: ramte alle arbejdssæt toppen af rep-målet sidst?
-    if(!def.isTime){
+    if(!def.isTime&&!isDeload(activeDate)){
       const top=parseTopReps(def.reps);
       const prevEx=prevMap[ex.id];
       if(top&&prevEx){
@@ -1675,6 +1730,8 @@ async function loadSettings(){
   customPrograms={};
   programsSnap.forEach(d=>{customPrograms[d.id]=d.data();});
   userGoal=settingsSnap.exists()?(settingsSnap.data().goal||null):null;
+  deloadUntil=settingsSnap.exists()?(settingsSnap.data().deloadUntil||null):null;
+  if(deloadUntil&&deloadUntil<tds(new Date()))deloadUntil=null; // udløbet
   if(settingsSnap.exists()&&settingsSnap.data().days&&Object.keys(settingsSnap.data().days).length){
     userSplit=settingsSnap.data().days;
     showView("log");
@@ -1684,7 +1741,7 @@ async function loadSettings(){
   }
 }
 async function saveSplit(){
-  await setDoc(doc(db,"users",CU.uid,"settings","split"),{days:userSplit,goal:userGoal||null});
+  await setDoc(doc(db,"users",CU.uid,"settings","split"),{days:userSplit,goal:userGoal||null,deloadUntil:deloadUntil||null});
   activeDaySelect=null;updateHdr();showView("today");
 }
 function applyPreset(name){userSplit={...PRESETS[name]};activeDaySelect=null;renderSettings();}

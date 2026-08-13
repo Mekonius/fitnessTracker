@@ -1,44 +1,44 @@
-# LØFT — Projektkontekst for Claude Code
+# LØFT — Status og næste skridt
 
-## Hvad er LØFT
-En træningstracker bygget som PWA (Progressive Web App). Hostet på GitHub Pages
-under brugeren `mekonius` (mekonius.github.io). Deploy sker automatisk via
-GitHub Actions når der committes til repoet.
-
-## Ejer / brug
-- Kenneth er administrator og eneste konto-ejer.
-- Kenneth og hans hustru træner sammen på én telefon, derfor multi-profil.
-- Sprog i UI: dansk. Kommuniker og skriv kommentarer på dansk.
-
-## Stack
-- Vanilla HTML/CSS/JS i `index.html` (ingen build-step, ingen framework).
-- Firebase til auth og datalagring.
-- PWA: `manifest.json`, service worker (`sw.js`), ikoner.
+## Kort resumé
+LØFT er en dansk træningstracker-PWA i ét `index.html`, hostet på GitHub Pages
+via GitHub Actions. Firebase-auth med Google-login virker; email/kodeord er ikke
+slået til i Firebase (kendt fejl på "Opret konto"). Multi-profil er bygget:
+adskilt historik pr. profil under `users/{uid}/profiles/{profil-id}/sessions/`,
+profilkort med initial + farve, skift via badge øverst.
 
 ## Design
-- Mørkt tema, baggrund ca. #0e0e0e.
-- Neongrøn accentfarve.
+- To temaer med toggle (🌙-knap øverst), valget gemmes i `localStorage` under
+  `loft_theme`.
+- Mørkt tema (standard): baggrund #0e0e0e, neongrøn accent #c8ff00.
+- Lyst tema (`data-theme="light"` på `<html>`): varm sandbaggrund #efe9dd,
+  mørk orange accent #c2611c.
+- Farverne ligger som CSS-variabler på `:root` og bliver overskrevet af
+  `:root[data-theme="light"]` — accenten er `--ac`.
 - Titel-font: Bebas Neue. Brødtekst: DM Mono.
 
-## Auth (Firebase)
-- Google Sign-In: AKTIVERET og virker.
-- Email/kodeord-login: IKKE aktiveret i Firebase. "Opret konto"-fanen giver
-  derfor fejlen "Email/kodeord-login er ikke slået til i Firebase". Enten
-  aktivér Email/Password i Firebase Console → Authentication → Sign-in method,
-  eller fjern email/kodeord-UI'et helt (kun Google-login).
+## Virker
+- Google Sign-In via Firebase.
+- PWA installerbar (manifest, service worker, ikoner).
+- Multi-profil med adskilt historik pr. profil.
+- Profilvælger: kort med initial + farve, "+" til ny profil, 8 farver, skift via badge.
+- Lyst/mørkt tema med toggle.
+- Programbygger: egne programmer med øvelser fra katalog, egne øvelser eller
+  kopieret fra et andet program.
 
-## Multi-profil (bygget og virker)
-- Firebase-datastruktur: `users/{uid}/profiles/{profil-id}/workouts/`
-- Helt adskilt træningshistorik pr. profil.
-- Profilkort med initial + farve. "+" opretter ny profil. 8 farver at vælge.
-- Skift aktiv profil via badge øverst.
+## Kendte problemer
+- Email/kodeord-login er ikke aktiveret i Firebase → fejl på "Opret konto".
+  Fix: aktivér Email/Password i Firebase Console, ELLER fjern email/kodeord-UI'et.
 
-## Ønsker / næste skridt
-- Kunne tilføje øvelser til et eksisterende program (fx maveøvelser til full body).
-- Den yderste div-ramme skal lyse i den aktive profils farve, så man kan se
-  hvilken profil der er valgt.
+## Næste opgaver
+1. Tilføje øvelser til et eksisterende program (fx maveøvelser til full body).
+   Delvist løst: egne programmer kan redigeres, og "⧉ FRA PROGRAM" kopierer
+   øvelserne fra fx full body ind i et eget program. De indbyggede programmer
+   kan stadig ikke redigeres direkte.
+2. Få den yderste div-ramme til at lyse i den aktive profils farve.
+   Ikke lavet — profilfarven bruges kun i badge og profilkort.
 
-## Arbejdsprincipper
-- Bevar den enkle no-build-arkitektur — én `index.html`, ingen bundler.
-- Ingen brud på eksisterende Firebase-struktur eller Google-login.
-- Skriv kortfattet, dansk, direkte.
+## Bemærkning
+Design-, sti- og statusoplysninger er tjekket mod `index.html` (2058 linjer).
+At email/kodeord-login mangler i Firebase kan ikke verificeres fra koden — kun
+fejlteksten findes i appen.

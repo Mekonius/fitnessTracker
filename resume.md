@@ -22,6 +22,7 @@ profilkort med initial + farve, skift via badge øverst.
 - PWA installerbar (manifest, service worker, ikoner).
 - Multi-profil med adskilt historik pr. profil.
 - Profilvælger: kort med initial + farve, "+" til ny profil, 8 farver, skift via badge.
+- Ramme rundt om hele appen lyser i den aktive profils farve.
 - Lyst/mørkt tema med toggle.
 - Programbygger: egne programmer med øvelser fra katalog, egne øvelser eller
   kopieret fra et andet program.
@@ -35,8 +36,8 @@ profilkort med initial + farve, skift via badge øverst.
    Delvist løst: egne programmer kan redigeres, og "⧉ FRA PROGRAM" kopierer
    øvelserne fra fx full body ind i et eget program. De indbyggede programmer
    kan stadig ikke redigeres direkte.
-2. Få den yderste div-ramme til at lyse i den aktive profils farve.
-   Ikke lavet — profilfarven bruges kun i badge og profilkort.
+2. ~~Få den yderste div-ramme til at lyse i den aktive profils farve.~~ Løst:
+   `#pframe` er en fast ramme om hele appen, farven sættes i `showScreen`.
 
 ## Bemærkning
 Design-, sti- og statusoplysninger er tjekket mod `index.html` (2058 linjer).

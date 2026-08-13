@@ -72,9 +72,13 @@ input:focus,textarea:focus{border-color:var(--ac)!important}
 .add-profile-card{background:var(--h0e0e0e);border:1px dashed var(--h2a2a2a);border-radius:12px;padding:28px 20px;display:flex;flex-direction:column;align-items:center;gap:12px;cursor:pointer;transition:all .2s}
 .add-profile-card:hover{border-color:var(--ac55);background:var(--h111)}
 .color-dot{width:28px;height:28px;border-radius:50%;cursor:pointer;outline-offset:2px}
+/* Ramme i den aktive profils farve */
+#pframe{display:none;position:fixed;inset:0;border:3px solid transparent;pointer-events:none;z-index:400}
 </style>
 </head>
 <body>
+<div id="pframe"></div>
+
 <div id="sload" style="height:100vh;display:flex;align-items:center;justify-content:center;color:var(--h444);font-size:12px;letter-spacing:2px">INDLÆSER…</div>
 
 <!-- Velkomst overlay -->
@@ -852,6 +856,15 @@ function showScreen(id){
     const el=document.getElementById(s);
     if(el)el.style.display=s===id?"block":"none";
   });
+  const fr=document.getElementById("pframe");
+  if(fr){
+    const vis=id==="sapp"&&activeProfile;
+    fr.style.display=vis?"block":"none";
+    if(vis){
+      fr.style.borderColor=activeProfile.color;
+      fr.style.boxShadow="inset 0 0 14px color-mix(in srgb,"+activeProfile.color+" 25%,transparent)";
+    }
+  }
 }
 
 // ── Profiles ──────────────────────────────────────────────────────────────────

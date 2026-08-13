@@ -616,7 +616,10 @@ const esc=s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"
 const iSet=()=>({reps:"",weight:""});
 function getProgram(type){
   if(!type)return null;
-  if(PROG[type])return PROG[type];
+  if(PROG[type]){
+    const extra=progExt[type]||[];
+    return extra.length?{...PROG[type],ex:[...PROG[type].ex,...extra]}:PROG[type];
+  }
   const cp=customPrograms[type];
   if(cp)return{label:cp.name.toUpperCase(),color:cp.color||"var(--ac)",bgColor:"var(--h2a1c08)",desc:"",ex:cp.exercises||[]};
   return null;
@@ -641,6 +644,7 @@ const pill=t=>{
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let CU=null,sessions={},activeDate=tds(new Date()),userSplit={},customPrograms={};
+let progExt={},progAddOpen=false,progAddTab="CORE"; // ekstra øvelser lagt til de indbyggede programmer
 let curView="today",logEx=[],logNote="",openEx=null,unsubSess=null;
 let activeDaySelect=null,editingProgram=null,builderMode=null,catalogTab="RYG",logRating=null,logInfoEx=null,progEx=null;
 let wizStep=null,wizGoal=null,wizDays=null,userGoal=null,goalGuideOpen=false,swapEx=null,deloadUntil=null;
@@ -723,6 +727,22 @@ function stopRest(){clearInterval(restInterval);restInterval=null;document.getEl
 window.startRest=startRest;window.stopRest=stopRest;
 window.startRestSel=xi=>{const el=document.getElementById("rest-sel-"+xi);startRest(parseInt(el&&el.value)||60);};
 window.toggleEx = id=>{openEx=openEx===id?null:id;renderProgram();};
+// ── Tilføj/fjern øvelser i de indbyggede programmer ───────────────────────────
+const saveProgExt=()=>setDoc(doc(db,"users",CU.uid,"settings","progext"),progExt).catch(()=>{});
+window.toggleProgAdd=()=>{progAddOpen=!progAddOpen;renderProgram();};
+window.setProgAddTab=g=>{progAddTab=g;renderProgram();};
+window.addExToProgram=(type,id,group)=>{
+  const ex=(CATALOG[group]||[]).find(e=>e.id===id);if(!ex)return;
+  if(getProgram(type)?.ex.some(e=>e.id===id))return;
+  progExt[type]=[...(progExt[type]||[]),{id:ex.id,name:ex.name,sets:ex.sets,reps:ex.reps,rest:ex.rest,machine:ex.machine||"",muscles:ex.muscles||"",tip:ex.tip||""}];
+  renderProgram();saveProgExt();
+};
+window.removeExFromProgram=(type,id)=>{
+  progExt[type]=(progExt[type]||[]).filter(e=>e.id!==id);
+  if(!progExt[type].length)delete progExt[type];
+  if(openEx===id)openEx=null;
+  renderProgram();saveProgExt();
+};
 window.setDate  = ds=>{activeDate=ds;if(curView==="program")renderProgram();else if(curView==="log"){initLog();renderLog();}};
 window.showView = showView;
 window.doAuth   = doAuth;
@@ -1189,9 +1209,32 @@ function renderProgram(){
       +'<div style="margin-bottom:12px"><div style="font-size:10px;color:var(--h444);letter-spacing:1.5px;margin-bottom:5px">MASKINE / UDSTYR</div><div style="font-size:12px;color:var(--h777);line-height:1.6">'+esc(ex.machine||"")+'</div></div>'
       +(ex.muscles?'<div style="margin-bottom:12px"><div style="font-size:10px;color:var(--h444);letter-spacing:1.5px;margin-bottom:5px">MUSKLER DER TRÆNES</div><div style="font-size:12px;color:'+p.color+';line-height:1.6;opacity:.85">'+esc(ex.muscles)+'</div></div>':"")
       +(ex.tip?'<div><div style="font-size:10px;color:var(--h444);letter-spacing:1.5px;margin-bottom:5px">TEKNIK & TIPS</div><div style="font-size:12px;color:var(--h888);line-height:1.8">'+esc(ex.tip)+'</div></div>':"")
+      +((progExt[type]||[]).some(e=>e.id===ex.id)?'<button class="btn-g" style="width:auto;padding:7px 14px;font-size:11px;margin-top:14px" onclick="removeExFromProgram(\''+type+'\',\''+ex.id+'\')">FJERN FRA PROGRAMMET</button>':"")
       +'</div>';
     h+='</div>';
   });
+  if(PROG[type]){
+    h+='<button class="'+(progAddOpen?"btn-p":"btn-g")+'" style="margin-top:12px;font-size:13px" onclick="toggleProgAdd()">'+(progAddOpen?"LUK":"+ TILFØJ ØVELSE")+'</button>';
+    if(progAddOpen){
+      h+='<div style="background:var(--h0a0a0a);border:1px solid var(--h1a1a1a);border-radius:8px;padding:14px;margin-top:12px">';
+      h+='<div style="font-size:11px;color:var(--h555);margin-bottom:12px;line-height:1.6">Øvelsen lægges til '+esc(typeLabel(type))+' på alle dage med det program.</div>';
+      h+='<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:12px">';
+      Object.keys(CATALOG).forEach(g=>{h+='<button class="chip'+(progAddTab===g?" active":"")+'" onclick="setProgAddTab(\''+g+'\')">'+g+'</button>';});
+      h+='</div>';
+      (CATALOG[progAddTab]||[]).forEach(ex=>{
+        const added=p.ex.some(e=>e.id===ex.id);
+        h+='<div style="display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid var(--h111)">';
+        h+='<div style="flex:1"><div style="font-size:12px;color:var(--he0dcd4)">'+esc(ex.name)+'</div>';
+        h+='<div style="font-size:10px;color:var(--h444)">'+ex.sets+' sæt · '+esc(ex.reps)+' · '+ex.rest+'</div></div>';
+        if(added)h+='<span style="font-size:11px;color:var(--ac);letter-spacing:1px">TILFØJET</span>';
+        else h+='<button class="chip" onclick="addExToProgram(\''+type+'\',\''+ex.id+'\',\''+progAddTab+'\')" style="padding:4px 12px;color:var(--ac);border-color:var(--ac4)">+</button>';
+        h+='</div>';
+      });
+      h+='</div>';
+    }
+  } else {
+    h+='<button class="btn-g" style="margin-top:12px;font-size:13px" onclick="editProgram(\''+type+'\')">REDIGER PROGRAM</button>';
+  }
   h+='<button class="btn-p" onclick="showView(\'log\')" style="margin-top:12px">START LOG →</button>';
   document.getElementById("vprogram").innerHTML=h;
   if(openEx){const ex=p.ex.find(e=>e.id===openEx);if(ex)setTimeout(()=>loadGifForExercise(ex.id,ex.name),50);}
@@ -1790,12 +1833,14 @@ function renderWizard(){
 
 // ── Settings / Split ─────────────────────────────────────────────────────────
 async function loadSettings(){
-  const [settingsSnap,programsSnap]=await Promise.all([
+  const [settingsSnap,programsSnap,extSnap]=await Promise.all([
     getDoc(doc(db,"users",CU.uid,"settings","split")),
-    getDocs(collection(db,"users",CU.uid,"programs"))
+    getDocs(collection(db,"users",CU.uid,"programs")),
+    getDoc(doc(db,"users",CU.uid,"settings","progext"))
   ]);
   customPrograms={};
   programsSnap.forEach(d=>{customPrograms[d.id]=d.data();});
+  progExt=extSnap.exists()?(extSnap.data()||{}):{};
   userGoal=settingsSnap.exists()?(settingsSnap.data().goal||null):null;
   deloadUntil=settingsSnap.exists()?(settingsSnap.data().deloadUntil||null):null;
   if(deloadUntil&&deloadUntil<tds(new Date()))deloadUntil=null; // udløbet

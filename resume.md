@@ -26,18 +26,21 @@ profilkort med initial + farve, skift via badge øverst.
 - Lyst/mørkt tema med toggle.
 - Programbygger: egne programmer med øvelser fra katalog, egne øvelser eller
   kopieret fra et andet program.
+- Øvelser kan tilføjes til de indbyggede programmer under Program-fanen
+  ("+ TILFØJ ØVELSE") og fjernes igen. Gemmes i `users/{uid}/settings/progext`
+  som `{programtype:[øvelser]}` og lægges på af `getProgram`, så de også kommer
+  med i Log og uge-analysen. Egne programmer redigeres i programbyggeren
+  ("REDIGER PROGRAM" fører derind).
 
 ## Kendte problemer
 - Email/kodeord-login er ikke aktiveret i Firebase → fejl på "Opret konto".
   Fix: aktivér Email/Password i Firebase Console, ELLER fjern email/kodeord-UI'et.
+- Er en session allerede gemt for dagen, ændrer en nytilføjet øvelse ikke den
+  gemte log — den kommer først med på næste session med det program.
 
 ## Næste opgaver
-1. Tilføje øvelser til et eksisterende program (fx maveøvelser til full body).
-   Delvist løst: egne programmer kan redigeres, og "⧉ FRA PROGRAM" kopierer
-   øvelserne fra fx full body ind i et eget program. De indbyggede programmer
-   kan stadig ikke redigeres direkte.
-2. ~~Få den yderste div-ramme til at lyse i den aktive profils farve.~~ Løst:
-   `#pframe` er en fast ramme om hele appen, farven sættes i `showScreen`.
+Ingen åbne. De to tidligere punkter (øvelser til eksisterende programmer og
+profilfarvet ramme om appen) er løst.
 
 ## Bemærkning
 Design-, sti- og statusoplysninger er tjekket mod `index.html` (2058 linjer).

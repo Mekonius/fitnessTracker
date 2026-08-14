@@ -201,6 +201,7 @@ input:focus,textarea:focus{border-color:var(--ac)!important}
   <div style="padding:20px;max-width:640px;margin:0 auto">
     <div id="vtoday"></div>
     <div id="vprogram" style="display:none"></div>
+    <div id="vnutrition" style="display:none"></div>
     <div id="vlog"     style="display:none"></div>
     <div id="vhistory" style="display:none"></div>
     <div id="vsettings" style="display:none"></div>
@@ -219,6 +220,8 @@ import { getAuth, onAuthStateChanged,
          updateProfile, signOut }                     from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
 import { getFirestore, collection, doc,
          setDoc, getDoc, getDocs, deleteDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { NGOALS, plan, entriesFromMap, weightTrend, recommendedAdjustment,
+         recompSignal, strengthChangePct }                from './nutrition.js';
 
 const app  = initializeApp({
   apiKey:"AIzaSyDyyEOWezeMnrcAmCZgtbjI0wh5GpYGkSg",
@@ -650,6 +653,8 @@ let activeDaySelect=null,editingProgram=null,builderMode=null,catalogTab="RYG",l
 let wizStep=null,wizGoal=null,wizDays=null,userGoal=null,goalGuideOpen=false,swapEx=null,deloadUntil=null;
 let profiles={},activeProfile=null,histProfileId=null,selectedColor=null,weights={},progMode="kg";
 let exNotes={},sessionStart=null,calOffset=0;
+// Kropsmål & Ernæring (pr. profil)
+let nutri=null,waist={},weightNotes={},nutriStep=null,nutriForm={},nutriErr=null;
 const COLORS=["#c8ff00","#5bc8ff","#ff8c5b","#c85bff","#ff5b8c","#5bffc8","#ffd75b","#ff5b5b"];
 const REP_SCHEMES=[[6,6,6],[8,8,8],[10,10,10],[12,10,8],[15,12,10],[5,5,5,5]];
 
@@ -989,7 +994,7 @@ function startListen(){
     if(curView==="today")renderToday();
     if(curView==="history"&&histProfileId===activeProfile.id)renderHistContent(sessions);
   });
-  loadWeights();loadExNotes();
+  loadWeights();loadExNotes();loadNutrition();
 }
 async function loadExNotes(){
   exNotes={};
@@ -1023,10 +1028,10 @@ window.toggleTheme=()=>{
 };
 syncThemeBtn();
 async function loadWeights(){
-  weights={};
+  weights={};weightNotes={};
   try{
     const snap=await getDocs(collection(db,"users",CU.uid,"profiles",activeProfile.id,"weights"));
-    snap.forEach(d=>{weights[d.id]=d.data().kg;});
+    snap.forEach(d=>{weights[d.id]=d.data().kg;if(d.data().note)weightNotes[d.id]=d.data().note;});
     if(curView==="today")renderToday();
   }catch(e){}
 }
@@ -1048,7 +1053,7 @@ function updateHdr(){
 // ── View ──────────────────────────────────────────────────────────────────────
 function showView(v){
   curView=v;
-  ["today","program","log","history","settings","builder"].forEach(n=>{
+  ["today","program","log","history","settings","builder","nutrition"].forEach(n=>{
     document.getElementById("v"+n).style.display=n===v?"block":"none";
     const t=document.getElementById("nav-"+n);if(t)t.className="tab"+(n===v?" active":"");
   });
@@ -1058,6 +1063,7 @@ function showView(v){
   else if(v==="history")renderHistory();
   else if(v==="settings")renderSettings();
   else if(v==="builder"){editingProgram=editingProgram||{name:"",exercises:[],color:"var(--ac)"};builderMode=null;renderBuilder();}
+  else if(v==="nutrition")renderNutrition();
 }
 
 function typeLabel(t){if(PROG[t])return PROG[t].label.replace(/\s*DAG$/,"");return customPrograms[t]?.name||t;}
@@ -1112,6 +1118,7 @@ function renderToday(){
   h+='<div style="font-size:11px;color:var(--h555);margin-top:3px">'+wk.sets+' sæt · '+wk.kg.toLocaleString("da-DK")+' kg løftet</div></div>';
   if(streak>0)h+='<div style="text-align:center;flex-shrink:0"><div style="font-size:20px;line-height:1">🔥</div><div style="font-size:10px;color:var(--ac);letter-spacing:1px;margin-top:3px">'+streak+' UGE'+(streak>1?"R":"")+'</div></div>';
   h+='</div></div>';
+  h+=nutriCard();
   // ── Kropsvægt ──
   const wDates=Object.keys(weights).sort();
   h+='<div style="margin-bottom:24px"><div style="font-size:10px;color:var(--h444);letter-spacing:2px;margin-bottom:10px">KROPSVÆGT</div>';
@@ -2096,6 +2103,370 @@ function renderBuilder(){
   h+='<button class="btn-p" onclick="saveCustomProgram()">'+(prog.id?"GEM ÆNDRINGER":"OPRET PROGRAM")+'</button>';
   document.getElementById("vbuilder").innerHTML=h;
 }
+
+// ── Kropsmål & Ernæring ───────────────────────────────────────────────────────
+const nutriDoc=()=>doc(db,"users",CU.uid,"profiles",activeProfile.id,"settings","nutrition");
+const kcalTxt=n=>Math.round(n).toLocaleString("da-DK");
+const kgTxt=n=>(Math.round(n*10)/10).toLocaleString("da-DK",{minimumFractionDigits:1});
+const latestOf=map=>{const d=Object.keys(map).sort();return d.length?map[d[d.length-1]]:null;};
+
+async function loadNutrition(){
+  nutri=null;waist={};
+  try{
+    const [nSnap,wSnap]=await Promise.all([
+      getDoc(nutriDoc()),
+      getDocs(collection(db,"users",CU.uid,"profiles",activeProfile.id,"waist"))
+    ]);
+    if(nSnap.exists())nutri=nSnap.data();
+    wSnap.forEach(d=>{waist[d.id]=d.data().cm;});
+  }catch(e){}
+  if(curView==="today")renderToday();else if(curView==="nutrition")renderNutrition();
+}
+
+// Planen regnes altid om med den nyeste vejning, men kaloriemålet er det gemte,
+// så en godkendt justering ikke bliver overskrevet af beregningen.
+function nutriLive(){
+  if(!nutri)return null;
+  const p=plan({...nutri,weightKg:latestOf(weights)||nutri.weightKg});
+  if(!p)return null;
+  const target=nutri.calorieTarget||p.calorieTarget;
+  return {...p,target,deficit:p.tdee-target};
+}
+const nutriWeightTrend=()=>weightTrend(entriesFromMap(weights));
+const nutriWaistTrend=()=>weightTrend(entriesFromMap(waist,{min:40,max:250}));
+function nutriVolumeEntries(){
+  return Object.entries(sessions).map(([date,s])=>{
+    let kg=0;
+    (s.exercises||[]).forEach(ex=>(ex.sets||[]).forEach(x=>{kg+=(parseFloat(x.reps)||0)*(parseFloat(x.weight)||0);}));
+    return{date,value:kg};
+  }).filter(e=>e.value>0);
+}
+function nutriAdjust(){
+  if(!nutri||!nutri.calorieTarget)return null;
+  const a=recommendedAdjustment({goal:nutri.goal,calorieTarget:nutri.calorieTarget,
+    entries:entriesFromMap(weights),sex:nutri.sex});
+  return a&&nutri.adjustDismissed!==a.to?a:null;
+}
+
+// ── Dashboard-card i Overblik ─────────────────────────────────────────────────
+function nutriCard(){
+  if(!nutri)return '<div style="margin-bottom:24px"><div style="font-size:10px;color:var(--h444);letter-spacing:2px;margin-bottom:10px">KROPSMÅL & ERNÆRING</div>'
+    +'<div class="sbox" style="padding:14px 16px;cursor:pointer" onclick="showView(\'nutrition\')">'
+    +'<div style="font-size:12px;color:var(--h666);line-height:1.7;margin-bottom:12px">Få et kaloriemål, proteinmål og en vægttrend, der bygger på din krop, dine skridt og din træning.</div>'
+    +'<span style="font-size:11px;color:var(--ac);letter-spacing:1px">SÆT DIT MÅL OP →</span></div></div>';
+  const L=nutriLive();if(!L)return "";
+  const t=nutriWeightTrend();
+  let h='<div style="margin-bottom:24px"><div style="font-size:10px;color:var(--h444);letter-spacing:2px;margin-bottom:10px">DIT MÅL</div>';
+  h+='<div class="sbox" style="padding:16px;cursor:pointer" onclick="showView(\'nutrition\')">';
+  h+='<div style="display:flex;align-items:baseline;gap:10px">'
+    +'<span style="font-family:\'Bebas Neue\';font-size:34px;color:var(--ac);line-height:1">'+kcalTxt(L.target)+'</span>'
+    +'<span style="font-size:11px;color:var(--h555)">kcal / dag</span>'
+    +'<span style="flex:1"></span><span style="font-size:14px;color:var(--h444)">›</span></div>';
+  h+='<div style="font-size:11px;color:var(--h666);margin-top:5px">'+NGOALS[L.goal].label+'</div>';
+  h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px">'
+    +'<div><div style="font-size:10px;color:var(--h444);letter-spacing:1.5px">PROTEIN</div>'
+    +'<div style="font-family:\'Bebas Neue\';font-size:22px;color:var(--he0dcd4);line-height:1.3">'+L.protein.target+' g</div></div>'
+    +'<div><div style="font-size:10px;color:var(--h444);letter-spacing:1.5px">FIBRE</div>'
+    +'<div style="font-family:\'Bebas Neue\';font-size:22px;color:var(--he0dcd4);line-height:1.3">'+L.fiberG+' g</div></div></div>';
+  if(t.ready&&t.avg!=null){
+    const ch=t.change,col=ch==null?"var(--h555)":ch<0?"var(--ac)":ch>0?"#ffc14d":"var(--h888)";
+    h+='<div style="display:flex;align-items:baseline;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid var(--h1a1a1a)">'
+      +'<span style="font-size:10px;color:var(--h444);letter-spacing:1.5px">7-DAGES VÆGT</span>'
+      +'<span style="font-size:13px;color:var(--he0dcd4)">'+kgTxt(t.avg)+' kg</span>'
+      +(ch!=null?'<span style="font-size:11px;color:'+col+'">'+(ch<0?"↓ ":ch>0?"↑ ":"→ ")+kgTxt(Math.abs(ch))+' kg</span>':"")
+      +'</div>';
+  }
+  if(nutriAdjust())h+='<div style="font-size:11px;color:var(--t-helkrop);margin-top:12px">Vi har et forslag til dit mål →</div>';
+  h+='</div></div>';
+  return h;
+}
+
+// ── Onboarding ────────────────────────────────────────────────────────────────
+const NSTEP_GOALS=[
+  ["fatloss","Tabe fedt","Underskud på ca. 15 % — roligt og til at holde"],
+  ["recomp","Tabe fedt og bygge muskler","Body recomposition: lille underskud, hvor vægten flytter sig langsomt, men kroppen ændrer sig"],
+  ["maintain","Holde min vægt","Samme vægt, mere styrke"],
+  ["muscle","Bygge muskler","Lille overskud på 5–10 % — ikke en bulk"]
+];
+function nutriRead(){
+  const v=id=>document.getElementById(id)?.value;
+  [["nf-age","age"],["nf-height","heightCm"],["nf-weight","weightKg"],
+   ["nf-steps","steps"],["nf-sessions","sessionsPerWeek"]].forEach(([id,k])=>{
+    const val=v(id);if(val!==undefined)nutriForm[k]=val;
+  });
+}
+function nutriErrBox(){
+  return nutriErr?'<div style="background:var(--h1a0808);border:1px solid #ff444430;border-radius:8px;padding:11px 14px;margin-bottom:14px;font-size:12px;color:#ff8080">'+esc(nutriErr)+'</div>':"";
+}
+function nutriWizard(){
+  let h='<div style="display:flex;align-items:baseline;gap:10px;margin-bottom:6px">'
+    +'<div style="font-family:\'Bebas Neue\';font-size:28px;letter-spacing:3px;color:var(--ac);line-height:1">KROPSMÅL</div>'
+    +'<span style="flex:1"></span><span style="font-size:11px;color:var(--h444);white-space:nowrap">TRIN '+nutriStep+' / 4</span></div>';
+  h+='<div style="display:flex;gap:4px;margin-bottom:22px">';
+  for(let i=1;i<=4;i++)h+='<div style="flex:1;height:3px;border-radius:2px;background:'+(i<=nutriStep?"var(--ac)":"var(--h1e1e1e)")+'"></div>';
+  h+='</div>'+nutriErrBox();
+
+  if(nutriStep===1){
+    h+='<div style="font-size:14px;color:var(--he0dcd4);margin-bottom:16px">Hvad vil du opnå?</div>';
+    NSTEP_GOALS.forEach(([id,label,expl])=>{
+      const sel=nutriForm.goal===id;
+      h+='<div class="hrow" style="cursor:pointer;border-color:'+(sel?"var(--ac)":"var(--h1a1a1a)")+';background:'+(sel?"var(--h2a1c08)":"var(--h111)")+'" onclick="nutriGoal(\''+id+'\')">'
+        +'<div style="font-size:13px;color:'+(sel?"var(--ac)":"var(--he0dcd4)")+'">'+label+'</div>'
+        +'<div style="font-size:11px;color:var(--h555);line-height:1.6;margin-top:4px">'+expl+'</div></div>';
+    });
+  } else if(nutriStep===2){
+    h+='<div style="font-size:14px;color:var(--he0dcd4);margin-bottom:6px">Om dig</div>';
+    h+='<div style="font-size:11px;color:var(--h555);line-height:1.6;margin-bottom:16px">Bruges til at estimere dit hvilestofskifte. Tallene bliver kun gemt på din profil.</div>';
+    h+='<div style="font-size:10px;color:var(--h444);letter-spacing:1.5px;margin-bottom:8px">KØN</div><div style="margin-bottom:16px">'
+      +'<span class="chip'+(nutriForm.sex==="female"?" active":"")+'" onclick="nutriSex(\'female\')">KVINDE</span>'
+      +'<span class="chip'+(nutriForm.sex==="male"?" active":"")+'" onclick="nutriSex(\'male\')">MAND</span></div>';
+    h+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">'
+      +'<div><div style="font-size:10px;color:var(--h444);margin-bottom:5px">ALDER</div><input id="nf-age" class="sinput" type="text" inputmode="numeric" value="'+esc(nutriForm.age??"")+'" placeholder="41"/></div>'
+      +'<div><div style="font-size:10px;color:var(--h444);margin-bottom:5px">HØJDE (CM)</div><input id="nf-height" class="sinput" type="text" inputmode="numeric" value="'+esc(nutriForm.heightCm??"")+'" placeholder="158"/></div>'
+      +'<div><div style="font-size:10px;color:var(--h444);margin-bottom:5px">VÆGT (KG)</div><input id="nf-weight" class="sinput" type="text" inputmode="decimal" value="'+esc(nutriForm.weightKg??"")+'" placeholder="81,7"/></div>'
+      +'</div>';
+  } else if(nutriStep===3){
+    const trainDays=Object.keys(userSplit).length;
+    h+='<div style="font-size:14px;color:var(--he0dcd4);margin-bottom:6px">Din aktivitet</div>';
+    h+='<div style="font-size:11px;color:var(--h555);line-height:1.6;margin-bottom:16px">Skridt vejer mest — hverdagsaktivitet betyder mere for forbrændingen end selve træningen.</div>';
+    h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+      +'<div><div style="font-size:10px;color:var(--h444);margin-bottom:5px">SKRIDT PR. DAG</div><input id="nf-steps" class="sinput" type="text" inputmode="numeric" value="'+esc(nutriForm.steps??"")+'" placeholder="7000"/></div>'
+      +'<div><div style="font-size:10px;color:var(--h444);margin-bottom:5px">TRÆNINGER PR. UGE</div><input id="nf-sessions" class="sinput" type="text" inputmode="numeric" value="'+esc(nutriForm.sessionsPerWeek??"")+'" placeholder="2"/></div>'
+      +'</div>';
+    if(trainDays)h+='<div style="font-size:11px;color:var(--h555);margin-top:10px;line-height:1.6">Din plan har '+trainDays+' træningsdag'+(trainDays>1?"e":"")+' om ugen — udfyldt for dig. Ret den, hvis du reelt træner et andet antal gange.</div>';
+    h+='<div style="font-size:11px;color:var(--h444);margin-top:10px;line-height:1.6">Ved du ikke dit skridttal, så gæt: 3.000 er en stillesiddende dag, 7.000 en almindelig aktiv dag, 11.000+ en dag hvor du er meget på benene.</div>';
+  } else {
+    const p=plan(nutriForm);
+    if(!p)return h+'<div style="font-size:12px;color:#ff8080">Der mangler oplysninger. Gå tilbage og udfyld dem.</div>'
+      +'<button class="btn-g" style="margin-top:16px" onclick="nutriBack()">← TILBAGE</button>';
+    h+='<div style="font-size:14px;color:var(--he0dcd4);margin-bottom:16px">Dit udgangspunkt</div>';
+    h+='<div class="sbox" style="padding:16px;margin-bottom:12px">'
+      +'<div style="display:flex;align-items:baseline;gap:10px;margin-bottom:14px">'
+      +'<span style="font-family:\'Bebas Neue\';font-size:40px;color:var(--ac);line-height:1">'+kcalTxt(p.calorieTarget)+'</span>'
+      +'<span style="font-size:12px;color:var(--h555)">kcal / dag</span></div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'
+      +nutriMini("VEDLIGEHOLDELSE","~"+kcalTxt(p.tdee),"kcal")
+      +nutriMini("HVILESTOFSKIFTE","~"+kcalTxt(p.bmr),"kcal")
+      +nutriMini("PROTEIN","~"+p.protein.target,"g")
+      +nutriMini("FIBRE","~"+p.fiberG,"g")
+      +'</div></div>';
+    if(p.warning)h+=nutriWarn(p.warning);
+    h+='<div style="font-size:11px;color:var(--h555);line-height:1.7;margin-bottom:16px">Alle tal er estimater og et udgangspunkt — din faktiske forbrænding kan afvige. Løft justerer efter din udvikling, når du har vejet dig et par uger.</div>';
+    h+='<button class="btn-p" onclick="nutriSave()">'+(nutri?"GEM ÆNDRINGER":"START MIT MÅL")+'</button>';
+    h+='<button class="btn-g" style="margin-top:8px" onclick="nutriBack()">← TILBAGE</button>';
+    return h;
+  }
+  h+='<div style="display:flex;gap:8px;margin-top:20px">';
+  if(nutriStep>1)h+='<button class="btn-g" style="flex:1" onclick="nutriBack()">← TILBAGE</button>';
+  h+='<button class="btn-p" style="flex:1" onclick="nutriNext()">NÆSTE →</button></div>';
+  if(nutri||nutriStep===1)h+='<button class="btn-g" style="margin-top:8px;font-size:11px" onclick="nutriCancel()">ANNULLER</button>';
+  return h;
+}
+const nutriMini=(label,val,unit)=>'<div><div style="font-size:10px;color:var(--h444);letter-spacing:1.5px;margin-bottom:3px">'+label+'</div>'
+  +'<div style="white-space:nowrap"><span style="font-family:\'Bebas Neue\';font-size:24px;color:var(--he0dcd4);line-height:1.1">'+val+'</span>'
+  +(unit?'<span style="font-size:11px;color:var(--h555)"> '+unit+'</span>':"")+'</div></div>';
+const nutriWarn=txt=>'<div style="background:var(--h1a1400);border:1px solid #ffd75b40;border-radius:8px;padding:13px 15px;margin-bottom:14px">'
+  +'<div style="font-size:11px;color:var(--t-helkrop);letter-spacing:1px;margin-bottom:5px">BEMÆRK</div>'
+  +'<div style="font-size:12px;color:#a08030;line-height:1.7">'+esc(txt)+'</div></div>';
+
+// ── Detaljeside ───────────────────────────────────────────────────────────────
+function renderNutrition(){
+  const el=document.getElementById("vnutrition");if(!el)return;
+  if(nutriStep){el.innerHTML=nutriWizard();return;}
+  const L=nutriLive();
+  if(!L){
+    el.innerHTML='<div style="text-align:center;padding:40px 0">'
+      +'<div style="font-family:\'Bebas Neue\';font-size:28px;letter-spacing:3px;color:var(--ac);margin-bottom:10px">KROPSMÅL</div>'
+      +'<div style="font-size:12px;color:var(--h666);line-height:1.8;margin-bottom:24px">Løft regner et kaloriemål, et proteinmål og et fibermål ud fra din krop,<br>dine skridt og din træning — og følger din vægttrend over tid.</div>'
+      +'<button class="btn-p" style="width:auto;padding:12px 28px" onclick="nutriStart()">KOM I GANG →</button></div>';
+    return;
+  }
+  const goal=NGOALS[L.goal];
+  const t=nutriWeightTrend(),w=nutriWaistTrend();
+  const strength=strengthChangePct(nutriVolumeEntries());
+  let h='<div style="display:flex;align-items:baseline;gap:10px;margin-bottom:20px">'
+    +'<div><div style="font-family:\'Bebas Neue\';font-size:28px;letter-spacing:3px;color:var(--ac);line-height:1">DIT MÅL</div>'
+    +'<div style="font-size:12px;color:var(--h555);margin-top:4px">'+goal.label+' — '+goal.expl.toLowerCase()+'</div></div>'
+    +'<span style="flex:1"></span>'
+    +'<button class="btn-g" style="width:auto;padding:6px 12px;font-size:11px" onclick="nutriStart()">REDIGER</button></div>';
+  h+=nutriErrBox();
+
+  // Sektion 1 — kaloriemålet
+  h+='<div class="sbox" style="padding:18px 16px;margin-bottom:12px">'
+    +'<div style="display:flex;align-items:baseline;gap:10px">'
+    +'<span style="font-family:\'Bebas Neue\';font-size:46px;color:var(--ac);line-height:1">'+kcalTxt(L.target)+'</span>'
+    +'<span style="font-size:12px;color:var(--h555)">kcal / dag</span></div>'
+    +'<div style="font-size:11px;color:var(--h555);line-height:1.7;margin-top:8px">Beregnet ud fra din vægt, højde, alder, aktivitet og dit mål. Det er et estimat, der justeres efter din udvikling.</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:16px;padding-top:14px;border-top:1px solid var(--h1a1a1a)">'
+    +nutriMini("VEDLIGEHOLD",kcalTxt(L.tdee),"kcal")
+    +nutriMini("DIT MÅL",kcalTxt(L.target),"kcal")
+    +nutriMini(L.deficit>=0?"UNDERSKUD":"OVERSKUD",kcalTxt(Math.abs(L.deficit)),"kcal")
+    +'</div>'
+    +'<div style="font-size:10px;color:var(--h2e2e2e);margin-top:12px;line-height:1.6">Hvilestofskifte ca. '+kcalTxt(L.bmr)+' kcal · aktivitetsfaktor '+L.activityFactor.toLocaleString("da-DK")+' (fra '+kcalTxt(L.inputs.steps)+' skridt og '+L.inputs.sessionsPerWeek+' træninger/uge)</div>'
+    +'</div>';
+  if(L.warning)h+=nutriWarn(L.warning);
+
+  // Protein og fibre
+  h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">';
+  h+='<div class="sbox" style="padding:14px 16px"><div style="font-size:10px;color:var(--h444);letter-spacing:1.5px;margin-bottom:5px">PROTEIN</div>'
+    +'<div style="font-family:\'Bebas Neue\';font-size:30px;color:var(--he0dcd4);line-height:1">'+L.protein.target+' g</div>'
+    +'<div style="font-size:11px;color:var(--h555);margin-top:6px;white-space:nowrap">Godt interval: '+L.protein.min+'–'+L.protein.max+' g</div></div>';
+  h+='<div class="sbox" style="padding:14px 16px"><div style="font-size:10px;color:var(--h444);letter-spacing:1.5px;margin-bottom:5px">FIBRE</div>'
+    +'<div style="font-family:\'Bebas Neue\';font-size:30px;color:var(--he0dcd4);line-height:1">'+L.fiberG+' g</div>'
+    +'<div style="font-size:11px;color:var(--h555);margin-top:6px">Kalorier er hovedmålet</div></div>';
+  h+='</div>';
+
+  // Adaptivt forslag
+  const adj=nutriAdjust();
+  if(adj){
+    h+='<div style="background:var(--h1a1400);border:1px solid #ffd75b40;border-radius:8px;padding:14px 16px;margin-bottom:12px">'
+      +'<div style="font-size:11px;color:var(--t-helkrop);letter-spacing:1px;margin-bottom:6px">FORSLAG TIL DIT MÅL</div>'
+      +'<div style="font-size:12px;color:#a08030;line-height:1.7;margin-bottom:12px">'+esc(adj.reason)+'</div>'
+      +'<div style="font-size:13px;color:var(--he0dcd4);margin-bottom:12px">Juster mål fra '+kcalTxt(adj.from)+' → <span style="color:var(--ac)">'+kcalTxt(adj.to)+' kcal</span></div>'
+      +'<div style="display:flex;gap:8px">'
+      +'<button class="btn-p" style="flex:1;font-size:13px" onclick="nutriApplyAdjust()">JUSTER MÅLET</button>'
+      +'<button class="btn-g" style="flex:1;font-size:12px" onclick="nutriDismissAdjust()">BEHOLD '+kcalTxt(adj.from)+'</button>'
+      +'</div></div>';
+  }
+
+  // Forventet udvikling
+  h+='<div style="font-size:11px;color:var(--h555);line-height:1.7;margin-bottom:24px">'+esc(L.expected.text)
+    +' Vand, salt, kulhydrater, fordøjelse og træning flytter vægten fra dag til dag — derfor ser Løft på trenden, ikke på enkelte vejninger.</div>';
+
+  // Vægt
+  h+='<div style="font-size:10px;color:var(--h444);letter-spacing:2px;margin-bottom:10px">VÆGTTREND</div>';
+  h+='<div class="sbox" style="padding:14px 16px;margin-bottom:12px">';
+  if(t.ready){
+    h+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">'
+      +nutriMini("DENNE UGE",kgTxt(t.avg),"kg")
+      +nutriMini("SIDSTE UGE",t.prevAvg!=null?kgTxt(t.prevAvg):"—",t.prevAvg!=null?"kg":"")
+      +nutriMini("ÆNDRING",t.change!=null?(t.change>0?"+":t.change<0?"−":"")+kgTxt(Math.abs(t.change)):"—",t.change!=null?"kg":"")
+      +'</div>';
+    h+='<div style="font-size:10px;color:var(--h2e2e2e);margin-top:10px;line-height:1.6">7-dages gennemsnit af '+t.points+' vejning'+(t.points>1?"er":"")
+      +(t.prevAvg!=null?" mod "+t.prevPoints+" i ugen før":"")+'. Seneste vejning '+kgTxt(t.latest)+' kg ('+fmtDate(t.latestDate)+').</div>';
+    if(weightNotes[t.latestDate])h+='<div style="font-size:11px;color:var(--h555);margin-top:8px;line-height:1.6">Note: '+esc(weightNotes[t.latestDate])+'</div>';
+    if(t.change==null)h+='<div style="font-size:11px;color:var(--h555);margin-top:8px;line-height:1.6">Vej dig et par gange mere, så kan vi sammenligne med ugen før.</div>';
+  } else {
+    h+='<div style="font-size:12px;color:var(--h666);line-height:1.7">Vej dig gerne et par gange om ugen. Løft bruger 7-dages gennemsnittet, så en enkelt dag ikke betyder noget.</div>';
+  }
+  h+='<div style="display:flex;gap:8px;margin-top:12px">'
+    +'<input id="nw-kg" class="field" type="text" inputmode="decimal" placeholder="Vægt i kg..." style="flex:1;padding:9px 12px;font-size:13px"/>'
+    +'<button class="btn-g" style="width:auto;padding:9px 16px;font-size:12px" onclick="nutriSaveWeight()">GEM</button></div>';
+  h+='<input id="nw-note" class="field" type="text" placeholder="Note (valgfri) — fx dårlig søvn, salt aftensmad" style="margin-top:8px;padding:9px 12px;font-size:12px"/>';
+  h+='</div>';
+  if(L.inputs.sex==="female")h+='<div style="font-size:11px;color:var(--h555);line-height:1.7;margin-bottom:24px">Vægten kan ændre sig mærkbart gennem menstruationscyklussen på grund af væske. Derfor bruger Løft din langsigtede vægttrend frem for enkelte vejninger.</div>';
+
+  // Talje
+  h+='<div style="font-size:10px;color:var(--h444);letter-spacing:2px;margin-bottom:10px">TALJEMÅL</div>';
+  h+='<div class="sbox" style="padding:14px 16px;margin-bottom:12px">';
+  if(w.ready){
+    h+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">'
+      +nutriMini("SENESTE",kgTxt(w.latest),"cm")
+      +nutriMini("UGE FØR",w.prevAvg!=null?kgTxt(w.prevAvg):"—",w.prevAvg!=null?"cm":"")
+      +nutriMini("ÆNDRING",w.change!=null?(w.change>0?"+":w.change<0?"−":"")+kgTxt(Math.abs(w.change)):"—",w.change!=null?"cm":"")
+      +'</div>';
+    h+='<div style="font-size:10px;color:var(--h2e2e2e);margin-top:10px">Målt '+fmtDate(w.latestDate)+'. Mål altid samme sted, gerne om morgenen.</div>';
+  } else {
+    h+='<div style="font-size:12px;color:var(--h666);line-height:1.7">Taljemålet fanger det vægten ikke kan: bliver du mindre om livet, mens vægten står stille, sker der noget godt. Mål samme sted, gerne om morgenen.</div>';
+  }
+  h+='<div style="display:flex;gap:8px;margin-top:12px">'
+    +'<input id="nw-cm" class="field" type="text" inputmode="decimal" placeholder="Talje i cm..." style="flex:1;padding:9px 12px;font-size:13px"/>'
+    +'<button class="btn-g" style="width:auto;padding:9px 16px;font-size:12px" onclick="nutriSaveWaist()">GEM</button></div>';
+  h+='</div>';
+
+  // Body recomposition-signal
+  const sig=recompSignal({weightChangeKg:t.change,waistChangeCm:w.change,strengthChangePct:strength});
+  if(sig)h+='<div style="background:var(--h231804);border:1px solid var(--ac4);border-radius:8px;padding:14px 16px;margin-bottom:12px">'
+    +'<div style="font-size:11px;color:var(--ac);letter-spacing:1px;margin-bottom:6px">BODY RECOMPOSITION</div>'
+    +'<div style="font-size:12px;color:var(--he0dcd4);line-height:1.7">'+esc(sig.text)+'</div></div>';
+  if(strength!=null)h+='<div style="font-size:11px;color:var(--h555);line-height:1.7;margin-bottom:24px">Løftet volumen de seneste 14 dage: '
+    +(strength>0?"+":"")+strength.toLocaleString("da-DK")+' % mod de 14 dage før.</div>';
+
+  h+='<button class="btn-g" onclick="showView(\'today\')">← TILBAGE TIL OVERBLIK</button>';
+  el.innerHTML=h;
+}
+
+// ── Handlers ──────────────────────────────────────────────────────────────────
+window.nutriStart=()=>{
+  nutriErr=null;nutriStep=1;
+  nutriForm={goal:nutri?.goal||null,sex:nutri?.sex||null,age:nutri?.age||"",
+    heightCm:nutri?.heightCm||"",weightKg:nutri?.weightKg||latestOf(weights)||"",
+    steps:nutri?.steps||"",sessionsPerWeek:nutri?.sessionsPerWeek??(Object.keys(userSplit).length||"")};
+  showView("nutrition");
+};
+window.nutriCancel=()=>{nutriStep=null;nutriErr=null;renderNutrition();};
+window.nutriGoal=g=>{nutriForm.goal=g;nutriErr=null;renderNutrition();};
+window.nutriSex=s=>{nutriRead();nutriForm.sex=s;renderNutrition();};
+window.nutriBack=()=>{nutriRead();nutriErr=null;nutriStep=Math.max(1,nutriStep-1);renderNutrition();};
+window.nutriNext=()=>{
+  nutriRead();
+  const n=v=>parseFloat(String(v??"").replace(",","."))||0;
+  if(nutriStep===1&&!nutriForm.goal)return nutriFail("Vælg hvad du vil opnå.");
+  if(nutriStep===2){
+    if(!nutriForm.sex)return nutriFail("Vælg køn — formlen for hvilestofskifte er forskellig.");
+    if(n(nutriForm.age)<14||n(nutriForm.age)>100)return nutriFail("Indtast en alder mellem 14 og 100 år.");
+    if(n(nutriForm.heightCm)<100||n(nutriForm.heightCm)>230)return nutriFail("Indtast en højde mellem 100 og 230 cm.");
+    if(n(nutriForm.weightKg)<30||n(nutriForm.weightKg)>300)return nutriFail("Indtast en vægt mellem 30 og 300 kg.");
+  }
+  if(nutriStep===3){
+    if(n(nutriForm.steps)<0||n(nutriForm.steps)>40000)return nutriFail("Indtast et skridttal mellem 0 og 40.000.");
+    if(n(nutriForm.sessionsPerWeek)<0||n(nutriForm.sessionsPerWeek)>14)return nutriFail("Indtast mellem 0 og 14 træninger om ugen.");
+  }
+  nutriErr=null;nutriStep=Math.min(4,nutriStep+1);renderNutrition();
+};
+function nutriFail(msg){nutriErr=msg;renderNutrition();}
+window.nutriSave=()=>{
+  const p=plan(nutriForm);if(!p)return nutriFail("Der mangler oplysninger.");
+  nutri={...p.inputs,
+    bmr:p.bmr,activityFactor:p.activityFactor,tdee:p.tdee,
+    calorieTarget:p.calorieTarget,proteinG:p.protein.target,proteinMin:p.protein.min,
+    proteinMax:p.protein.max,fiberG:p.fiberG,
+    calcInputs:p.inputs,                       // gemmer hvad tallene blev regnet ud fra
+    createdAt:nutri?.createdAt||new Date().toISOString(),
+    updatedAt:new Date().toISOString(),
+    adjustments:nutri?.adjustments||[],adjustDismissed:null};
+  setDoc(nutriDoc(),nutri).catch(()=>{});
+  // Vægten fra opsætningen tæller som dagens vejning, hvis der ikke er én
+  const today=tds(new Date());
+  if(p.inputs.weightKg&&weights[today]==null){
+    weights[today]=p.inputs.weightKg;
+    setDoc(doc(db,"users",CU.uid,"profiles",activeProfile.id,"weights",today),{kg:p.inputs.weightKg}).catch(()=>{});
+  }
+  nutriStep=null;nutriErr=null;renderNutrition();
+};
+window.nutriSaveWeight=()=>{
+  const el=document.getElementById("nw-kg"),nEl=document.getElementById("nw-note");
+  const kg=parseFloat((el?.value||"").replace(",","."));
+  if(!kg||kg<20||kg>400)return nutriFail("Indtast en vægt mellem 20 og 400 kg.");
+  const note=(nEl?.value||"").trim(),today=tds(new Date());
+  weights[today]=kg;
+  if(note)weightNotes[today]=note;else delete weightNotes[today];
+  setDoc(doc(db,"users",CU.uid,"profiles",activeProfile.id,"weights",today),note?{kg,note}:{kg}).catch(()=>{});
+  nutriErr=null;renderNutrition();
+};
+window.nutriSaveWaist=()=>{
+  const el=document.getElementById("nw-cm");
+  const cm=parseFloat((el?.value||"").replace(",","."));
+  if(!cm||cm<40||cm>250)return nutriFail("Indtast et taljemål mellem 40 og 250 cm.");
+  const today=tds(new Date());
+  waist[today]=cm;
+  setDoc(doc(db,"users",CU.uid,"profiles",activeProfile.id,"waist",today),{cm}).catch(()=>{});
+  nutriErr=null;renderNutrition();
+};
+window.nutriApplyAdjust=()=>{
+  const a=nutriAdjust();if(!a)return;
+  nutri={...nutri,calorieTarget:a.to,adjustDismissed:null,
+    adjustments:[...(nutri.adjustments||[]),{date:tds(new Date()),from:a.from,to:a.to}],
+    updatedAt:new Date().toISOString()};
+  setDoc(nutriDoc(),nutri).catch(()=>{});
+  renderNutrition();
+};
+window.nutriDismissAdjust=()=>{
+  const a=nutriAdjust();if(!a)return;
+  nutri={...nutri,adjustDismissed:a.to};
+  setDoc(nutriDoc(),nutri).catch(()=>{});
+  renderNutrition();
+};
 
 function renderHistContent(data){
   const el=document.getElementById("hcontent");if(!el)return;

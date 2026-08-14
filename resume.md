@@ -32,6 +32,26 @@ profilkort med initial + farve, skift via badge øverst.
   med i Log og uge-analysen. Egne programmer redigeres i programbyggeren
   ("REDIGER PROGRAM" fører derind).
 
+## Kropsmål & Ernæring (nyt modul)
+- Beregninger ligger i `nutrition.js` (rent modul, ingen DOM/Firebase), UI i
+  `index.html`. Testes med `node --test "tests/*.test.mjs"` — 48 tests.
+- BMR (Mifflin-St Jeor) → aktivitetsfaktor fra skridt + træninger/uge (loft
+  1,75) → TDEE → kaloriemål efter mål: fedttab −15 %, recomposition −10 %,
+  vedligeholdelse 0, muskelopbygning +7 %.
+- Sikkerhedsgulv: 1.200 kcal (kvinde) / 1.500 kcal (mand). Under det — eller
+  under hvilestofskiftet — vises en advarsel i stedet for bare tallet.
+- Protein 1,6 g/kg (interval 1,4–1,8); kilo over 90 tæller halvt. Fibre
+  14 g/1000 kcal af vedligeholdelsesbehovet, holdt i 25–35 g.
+- Vægttrend: 7-dages snit mod ugen før. Adaptivt forslag efter ~3 uger, i skridt
+  på 100–150 kcal, som brugeren selv skal godkende — appen ændrer aldrig selv.
+- Taljemål + løftet volumen giver recomposition-signalet ("kan være tegn på").
+- Data pr. profil: `settings/nutrition` (mål + de inputs det blev regnet ud fra
+  + log over justeringer), `waist/{dato}` = `{cm}`, og de eksisterende
+  `weights/{dato}`-dokumenter udvidet med en valgfri `note`.
+- Onboarding i 4 trin (mål → krop → aktivitet → resultat). Træninger/uge
+  prefilles fra planen. Ingen Apple Health/Health Connect i projektet, så skridt
+  indtastes manuelt.
+
 ## Kendte problemer
 - Email/kodeord-login er ikke aktiveret i Firebase → fejl på "Opret konto".
   Fix: aktivér Email/Password i Firebase Console, ELLER fjern email/kodeord-UI'et.

@@ -48,6 +48,8 @@ profilkort med initial + farve, skift via badge øverst.
 - Data pr. profil: `settings/nutrition` (mål + de inputs det blev regnet ud fra
   + log over justeringer), `waist/{dato}` = `{cm}`, og de eksisterende
   `weights/{dato}`-dokumenter udvidet med en valgfri `note`.
+- Adgang: egen KOST-fane i fanelinjen, og et kort i I dag-fanen. Fanenavnene er
+  forkortet (Overblik → I dag) så seks faner kan være på én linje.
 - Onboarding i 4 trin (mål → krop → aktivitet → resultat). Træninger/uge
   prefilles fra planen. Ingen Apple Health/Health Connect i projektet, så skridt
   indtastes manuelt.

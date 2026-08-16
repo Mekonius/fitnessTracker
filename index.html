@@ -39,7 +39,7 @@ input:focus,textarea:focus{border-color:var(--ac)!important}
 .divider::before,.divider::after{content:"";flex:1;height:1px;background:var(--h222)}
 .field{width:100%;background:var(--h111);border:1px solid var(--h2a2a2a);border-radius:6px;color:var(--hf0ece4);padding:12px 14px;font-size:13px;font-family:inherit}
 .field::placeholder{color:var(--h444)}
-.tab{background:transparent;border:none;border-bottom:2px solid transparent;color:var(--h444);padding:7px 12px;cursor:pointer;font-size:11px;letter-spacing:1.5px;font-family:inherit;text-transform:uppercase}
+.tab{background:transparent;border:none;border-bottom:2px solid transparent;color:var(--h444);padding:7px 5px;cursor:pointer;font-size:11px;letter-spacing:.7px;font-family:inherit;text-transform:uppercase;white-space:nowrap}
 .tab.active{border-bottom-color:var(--ac);color:var(--ac)}
 .urow{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:6px;margin-bottom:5px;border:1px solid var(--h1a1a1a);background:var(--h111)}
 .sbox{background:var(--h111);border:1px solid var(--h1a1a1a);border-radius:6px;padding:12px 10px}
@@ -194,9 +194,10 @@ input:focus,textarea:focus{border-color:var(--ac)!important}
     </div>
     <div id="hdate" style="font-size:11px;color:var(--h555);margin-bottom:10px"></div>
     <div style="display:flex;gap:2px">
-      <button class="tab active" id="nav-today"   onclick="showView('today')">Overblik</button>
+      <button class="tab active" id="nav-today"   onclick="showView('today')">I dag</button>
       <button class="tab"        id="nav-program" onclick="showView('program')">Program</button>
       <button class="tab"        id="nav-log"     onclick="showView('log')">Log</button>
+      <button class="tab"        id="nav-nutrition" onclick="showView('nutrition')">Kost</button>
       <button class="tab"        id="nav-history" onclick="showView('history')">Historik</button>
       <button class="tab"        id="nav-settings" onclick="showView('settings')">Plan</button>
     </div>

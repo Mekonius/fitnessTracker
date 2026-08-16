@@ -22,7 +22,13 @@ profilkort med initial + farve, skift via badge øverst.
 - PWA installerbar (manifest, service worker, ikoner).
 - Multi-profil med adskilt historik pr. profil.
 - Profilvælger: kort med initial + farve, "+" til ny profil, 8 farver, skift via badge.
-- Ramme rundt om hele appen lyser i den aktive profils farve.
+- Den aktive profils farve er appens accent: logo, aktiv fane, primærknapper,
+  nøgletal, links og glow-rammen om appen. Accentvariablerne (`--ac` m.fl.)
+  sættes ud fra profilfarven i `applyProfileAccent()`; i lyst tema mørknes den
+  (42 % blandet med næsten-sort) for læsbarhed. Program-typernes farver og
+  advarsler er uændrede.
+- Rammen er et glow uden streg. På iPhone runder den hjørnerne (64px) og fader
+  ud over de øverste 10 % via en maske, så den står som et U.
 - Lyst/mørkt tema med toggle.
 - Programbygger: egne programmer med øvelser fra katalog, egne øvelser eller
   kopieret fra et andet program.

@@ -76,7 +76,8 @@ input:focus,textarea:focus{border-color:var(--ac)!important}
 /* Ramme i den aktive profils farve — et blødt glow, ingen streg */
 #pframe{display:none;position:fixed;inset:0;pointer-events:none;z-index:400}
 /* iPhone: glowet runder hjørnerne og trækkes op over kanten, så toppen er åben — et stort U */
-:root[data-iphone] #pframe{top:-90px;border-radius:0 0 64px 64px}
+:root[data-iphone] #pframe{border-radius:0 0 64px 64px;
+  -webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 10%);mask-image:linear-gradient(to bottom,transparent 0,#000 10%)}
 </style>
 </head>
 <body>
@@ -880,18 +881,41 @@ onAuthStateChanged(auth, async user=>{
 });
 
 // ── Screen toggling ───────────────────────────────────────────────────────────
+// Den aktive profils farve bliver appens accent. I lyst tema mørknes den, så
+// tekst og knapper stadig er læsbare på den sandfarvede baggrund.
+const ACCENT_VARS=["--ac","--ac3","--ac4","--ac5","--ac55","--ac6","--achover","--acsoft",
+  "--h2a1c08","--h1d1408","--h231804","--h5a3a14"];
+function applyProfileAccent(){
+  const st=document.documentElement.style;
+  if(!activeProfile){ACCENT_VARS.forEach(v=>st.removeProperty(v));return;}
+  const light=document.documentElement.getAttribute("data-theme")==="light";
+  const mix=(a,p,b)=>"color-mix(in srgb,"+a+" "+p+"%,"+b+")";
+  const base=light?mix(activeProfile.color,42,"#14110a"):activeProfile.color;
+  const tint=p=>mix(base,p,light?"#ffffff":"#0e0e0e");
+  st.setProperty("--ac",base);
+  [["--ac3",19],["--ac4",25],["--ac5",31],["--ac55",33],["--ac6",38]]
+    .forEach(([v,p])=>st.setProperty(v,mix(base,p,"transparent")));
+  st.setProperty("--achover",mix(base,85,"#000000"));
+  st.setProperty("--acsoft",mix(base,76,"#000000"));
+  st.setProperty("--h2a1c08",tint(13));
+  st.setProperty("--h1d1408",tint(8));
+  st.setProperty("--h231804",tint(9));
+  st.setProperty("--h5a3a14",tint(29));
+}
+
 function showScreen(id){
   ["sload","sauth","sprofile","sapp"].forEach(s=>{
     const el=document.getElementById(s);
     if(el)el.style.display=s===id?"block":"none";
   });
+  applyProfileAccent();
   const fr=document.getElementById("pframe");
   if(fr){
     const vis=id==="sapp"&&activeProfile;
     fr.style.display=vis?"block":"none";
     if(vis){
-      const g=p=>"color-mix(in srgb,"+activeProfile.color+" "+p+"%,transparent)";
-      fr.style.boxShadow="inset 0 0 10px "+g(70)+",inset 0 0 30px "+g(42)+",inset 0 0 70px "+g(18);
+      const g=p=>"color-mix(in srgb,var(--ac) "+p+"%,transparent)";
+      fr.style.boxShadow="inset 0 0 7px "+g(72)+",inset 0 0 18px "+g(40)+",inset 0 0 40px "+g(16);
     }
   }
 }
@@ -1028,6 +1052,7 @@ window.toggleTheme=()=>{
   const light=document.documentElement.getAttribute("data-theme")==="light";
   if(light){document.documentElement.removeAttribute("data-theme");localStorage.setItem("loft_theme","dark");}
   else{document.documentElement.setAttribute("data-theme","light");localStorage.setItem("loft_theme","light");}
+  applyProfileAccent();
   syncThemeBtn();
 };
 syncThemeBtn();

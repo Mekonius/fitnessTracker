@@ -10,7 +10,8 @@
 <link rel="manifest" href="manifest.json"/>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏋️</text></svg>"/>
 <link rel="apple-touch-icon" href="apple-touch-icon.png"/>
-<script>(function(){try{if(localStorage.getItem("loft_theme")==="light"){document.documentElement.setAttribute("data-theme","light");var m=document.querySelector('meta[name=theme-color]');if(m)m.content="#f3efe7";}}catch(e){}})();</script>
+<script>(function(){try{if(localStorage.getItem("loft_theme")==="light"){document.documentElement.setAttribute("data-theme","light");var m=document.querySelector('meta[name=theme-color]');if(m)m.content="#f3efe7";}}catch(e){}
+try{var ua=navigator.userAgent;if(/iPhone|iPod/.test(ua)||(/iPad|Macintosh/.test(ua)&&navigator.maxTouchPoints>1&&Math.min(screen.width,screen.height)<500))document.documentElement.setAttribute("data-iphone","1");}catch(e){}})();</script>
 <title>LØFT</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Bebas+Neue&display=swap" rel="stylesheet"/>
 <style>
@@ -74,6 +75,7 @@ input:focus,textarea:focus{border-color:var(--ac)!important}
 .color-dot{width:28px;height:28px;border-radius:50%;cursor:pointer;outline-offset:2px}
 /* Ramme i den aktive profils farve */
 #pframe{display:none;position:fixed;inset:0;border:3px solid transparent;pointer-events:none;z-index:400}
+:root[data-iphone] #pframe{border-top:0;border-radius:0 0 46px 46px}
 </style>
 </head>
 <body>

@@ -60,6 +60,17 @@ profilkort med initial + farve, skift via badge øverst.
   prefilles fra planen. Ingen Apple Health/Health Connect i projektet, så skridt
   indtastes manuelt.
 
+## Opdatering (så man ikke skal slette genvejen)
+- CI stempler samme git-sha i `<meta name="build">` og i `version.txt`.
+- Appen henter `version.txt` med `no-store` ved opstart og hver gang den kommer i
+  forgrunden (højst hvert 30. sekund). Er sha'en en anden end den kørende,
+  ryddes cachen og siden genindlæses — undtagen midt i en logning eller
+  opsætning, hvor der i stedet vises en "NY VERSION KLAR"-bjælke.
+- Plan-fanen viser den kørende version og har "SØG EFTER OPDATERING".
+- `sw.js` henter egne sider/scripts med `cache:"reload"`, så iOS ikke kan blive
+  ved med at levere en gammel `index.html` gennem HTTP-cachen. Cache-fallback
+  ved offline er bevaret.
+
 ## Kendte problemer
 - Email/kodeord-login er ikke aktiveret i Firebase → fejl på "Opret konto".
   Fix: aktivér Email/Password i Firebase Console, ELLER fjern email/kodeord-UI'et.

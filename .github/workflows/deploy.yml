@@ -38,6 +38,12 @@ jobs:
           mkdir -p _site
           rsync -a --exclude='.git' --exclude='.github' --exclude='_site' --exclude='*.zip' ./ _site/
 
+      - name: Stempl build-id (så appen kan se at der er en ny version)
+        run: |
+          printf '%s' "$GITHUB_SHA" > _site/version.txt
+          sed -i 's|<meta name="build" content="__BUILD__"/>|<meta name="build" content="'"$GITHUB_SHA"'"/>|' _site/index.html
+          grep -q "<meta name=\"build\" content=\"$GITHUB_SHA\"/>" _site/index.html || { echo "build-id blev ikke stemplet"; exit 1; }
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site

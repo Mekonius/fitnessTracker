@@ -4,6 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
 <meta name="theme-color" content="#0e0e0e"/>
+<meta name="build" content="__BUILD__"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 <meta name="apple-mobile-web-app-title" content="LØFT"/>
@@ -82,6 +83,10 @@ input:focus,textarea:focus{border-color:var(--ac)!important}
 </head>
 <body>
 <div id="pframe"></div>
+<div id="updbar" style="display:none;position:fixed;left:12px;right:12px;bottom:14px;z-index:500;background:var(--h2a1c08);border:1px solid var(--ac4);border-radius:10px;padding:12px 14px;cursor:pointer" onclick="applyUpdate()">
+  <div style="font-size:12px;color:var(--ac);letter-spacing:1px">NY VERSION KLAR</div>
+  <div style="font-size:11px;color:var(--h777);margin-top:3px">Tryk for at opdatere — dine data er gemt.</div>
+</div>
 
 <div id="sload" style="height:100vh;display:flex;align-items:center;justify-content:center;color:var(--h444);font-size:12px;letter-spacing:2px">INDLÆSER…</div>
 
@@ -253,6 +258,53 @@ function closeWelcome(){
 window.closeWelcome=closeWelcome;
 
 // Register service worker
+// ── Opdatering ────────────────────────────────────────────────────────────────
+// CI stempler samme build-id i <meta name=build> og i version.txt. Er de
+// forskellige, kører appen en ældre version end den der ligger på serveren.
+const BUILD=document.querySelector('meta[name=build]')?.content||"";
+const STAMPED=!!BUILD&&BUILD[0]!=="_";
+let updateSeen=null,updateLast=0;
+window.applyUpdate=async()=>{
+  try{
+    const regs=await navigator.serviceWorker?.getRegistrations?.()||[];
+    await Promise.all(regs.map(r=>r.update().catch(()=>{})));
+    const keys=await caches.keys();
+    await Promise.all(keys.map(k=>caches.delete(k)));
+  }catch(e){}
+  location.reload();
+};
+async function liveBuild(){
+  const r=await fetch("version.txt?t="+Date.now(),{cache:"no-store"});
+  if(!r.ok)throw new Error("no version");
+  return (await r.text()).trim();
+}
+async function checkUpdate(force){
+  if(!STAMPED)return null;   // lokal kørsel uden stempel
+  if(!force&&Date.now()-updateLast<30000)return null;
+  updateLast=Date.now();
+  let live;
+  try{live=await liveBuild();}catch(e){return null;}
+  if(!live||live===BUILD)return false;
+  if(live===updateSeen&&!force)return true;
+  updateSeen=live;
+  // Midt i en logning eller en opsætning genindlæser vi ikke bag om ryggen
+  if(curView==="log"||nutriStep||editingProgram){
+    const bar=document.getElementById("updbar");if(bar)bar.style.display="block";
+    return true;
+  }
+  applyUpdate();
+  return true;
+}
+window.manualUpdate=async()=>{
+  const el=document.getElementById("updtxt");
+  if(el)el.textContent="SØGER…";
+  const res=await checkUpdate(true);
+  if(el)el.textContent=res===false?"DU ER PÅ NYESTE VERSION":res===null?"KUNNE IKKE TJEKKE — ER DU ONLINE?":"NY VERSION FUNDET — OPDATERER…";
+};
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)checkUpdate();});
+window.addEventListener("focus",()=>checkUpdate());
+setTimeout(()=>checkUpdate(),3000);
+
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("sw.js").catch(()=>{});
 }
@@ -1989,6 +2041,10 @@ function renderSettings(){
   const trainDays=Object.keys(userSplit).length;
   if(trainDays)h+='<div style="font-size:11px;color:var(--h555);margin-bottom:16px">'+trainDays+' træningsdage pr. uge</div>';
   h+='<button class="btn-p"'+(trainDays?'':' disabled')+' onclick="saveSplit()">GEM PLAN</button>';
+  // Version + manuelt opdateringstjek
+  h+='<div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--h1a1a1a);display:flex;align-items:center;gap:10px">'
+    +'<span id="updtxt" style="flex:1;font-size:10px;color:var(--h2e2e2e);letter-spacing:1px">VERSION '+(STAMPED?BUILD.slice(0,7).toUpperCase():"LOKAL")+'</span>'
+    +'<button class="btn-g" style="width:auto;padding:6px 12px;font-size:11px" onclick="manualUpdate()">SØG EFTER OPDATERING</button></div>';
   // Debug section — only visible to app owner
   if(CU&&CU.email==="kenneth.l.thomsen@gmail.com"){
     h+='<div style="margin-top:32px;padding-top:20px;border-top:1px solid var(--h1a1a1a)">'

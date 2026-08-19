@@ -78,10 +78,34 @@ profilkort med initial + farve, skift via badge øverst.
   gemte log — den kommer først med på næste session med det program.
 
 ## Næste opgaver
-Ingen åbne. De to tidligere punkter (øvelser til eksisterende programmer og
-profilfarvet ramme om appen) er løst.
+Kræver kontoejeren:
+1. Email/kodeord-login: aktivér Email/Password i Firebase Console, ELLER fjern
+   "Opret konto"-fanen så kun Google-login står.
+
+Beslutninger:
+2. Recomposition-satsen: −10 % som specificeret (1.920 kcal for eksempel-
+   personen) vs ca. −14 % (1.830), som rammer sanity-intervallet 1.700–1.850.
+3. iOS: bliv på PWA (gjort) vs native skal om web-appen vs rigtig native app.
+   Native gevinst = Apple Health (skridt + vægt) og baggrundstimer.
+4. Notifikationer via web push (kræver Firebase Cloud Messaging).
+
+Funktionshuller:
+5. Indbyggede programmer: kun tilføjede øvelser kan fjernes. Indbyggede øvelser
+   kan ikke fjernes, få ændret sæt/reps/hvil eller flyttes i rækkefølgen.
+6. Profilnavn og -farve kan ikke ændres efter oprettelse (kræver sletning, hvor
+   historikken ryger med). Mere generende nu hvor profilfarven styrer accenten.
+7. Allerede gemt session: en nytilføjet øvelse kommer først med næste gang.
+8. Skridt indtastes manuelt (ingen Health-integration i en PWA).
+9. Cyklus-tracking ikke bygget — kostmodulet kan udvides uden at røre
+   beregningerne.
+
+Teknisk oprydning:
+10. `tests/` deployes med til GitHub Pages (mangler en exclude i workflowet).
+11. Kun beregningslaget har automatiske tests; UI-flows testes manuelt.
+12. Ingen linter.
 
 ## Bemærkning
-Design-, sti- og statusoplysninger er tjekket mod `index.html` (2058 linjer).
+Design-, sti- og statusoplysninger er tjekket mod koden (index.html ~2.570 linjer
++ nutrition.js).
 At email/kodeord-login mangler i Firebase kan ikke verificeres fra koden — kun
 fejlteksten findes i appen.

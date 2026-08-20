@@ -22,6 +22,9 @@ profilkort med initial + farve, skift via badge øverst.
 - PWA installerbar (manifest, service worker, ikoner).
 - Multi-profil med adskilt historik pr. profil.
 - Profilvælger: kort med initial + farve, "+" til ny profil, 8 farver, skift via badge.
+- Profiler kan omdøbes og skifte farve bagefter: ✎ på profilkortet åbner samme
+  modal som ved oprettelse og skriver `{name,color}` med merge, så historikken
+  og `createdAt` bevares.
 - Den aktive profils farve er appens accent: logo, aktiv fane, primærknapper,
   nøgletal, links og glow-rammen om appen. Accentvariablerne (`--ac` m.fl.)
   sættes ud fra profilfarven i `applyProfileAccent()`; i lyst tema mørknes den
@@ -92,17 +95,14 @@ Beslutninger:
 Funktionshuller:
 5. Indbyggede programmer: kun tilføjede øvelser kan fjernes. Indbyggede øvelser
    kan ikke fjernes, få ændret sæt/reps/hvil eller flyttes i rækkefølgen.
-6. Profilnavn og -farve kan ikke ændres efter oprettelse (kræver sletning, hvor
-   historikken ryger med). Mere generende nu hvor profilfarven styrer accenten.
-7. Allerede gemt session: en nytilføjet øvelse kommer først med næste gang.
-8. Skridt indtastes manuelt (ingen Health-integration i en PWA).
-9. Cyklus-tracking ikke bygget — kostmodulet kan udvides uden at røre
+6. Allerede gemt session: en nytilføjet øvelse kommer først med næste gang.
+7. Skridt indtastes manuelt (ingen Health-integration i en PWA).
+8. Cyklus-tracking ikke bygget — kostmodulet kan udvides uden at røre
    beregningerne.
 
 Teknisk oprydning:
-10. `tests/` deployes med til GitHub Pages (mangler en exclude i workflowet).
-11. Kun beregningslaget har automatiske tests; UI-flows testes manuelt.
-12. Ingen linter.
+9. Kun beregningslaget har automatiske tests; UI-flows testes manuelt.
+10. Ingen linter.
 
 ## Bemærkning
 Design-, sti- og statusoplysninger er tjekket mod koden (index.html ~2.570 linjer

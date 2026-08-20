@@ -70,6 +70,8 @@ input:focus,textarea:focus{border-color:var(--ac)!important}
 .profile-avatar{width:64px;height:64px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:26px;font-family:"Bebas Neue",sans-serif;letter-spacing:1px;flex-shrink:0}
 .profile-name{font-size:14px;color:var(--he0dcd4);letter-spacing:1px}
 .profile-delete{position:absolute;top:8px;right:8px;background:none;border:none;color:var(--h333);cursor:pointer;font-size:16px;padding:4px;line-height:1}
+.profile-edit{position:absolute;top:6px;left:6px;background:none;border:none;color:var(--h444);cursor:pointer;font-size:14px;padding:6px;line-height:1}
+.profile-edit:hover{color:var(--ac)}
 .profile-delete:hover{color:#ff4444}
 .add-profile-card{background:var(--h0e0e0e);border:1px dashed var(--h2a2a2a);border-radius:12px;padding:28px 20px;display:flex;flex-direction:column;align-items:center;gap:12px;cursor:pointer;transition:all .2s}
 .add-profile-card:hover{border-color:var(--ac55);background:var(--h111)}
@@ -166,13 +168,13 @@ input:focus,textarea:focus{border-color:var(--ac)!important}
 <!-- NY PROFIL MODAL -->
 <div id="smodal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:200;align-items:center;justify-content:center;padding:20px">
   <div style="background:var(--h141414);border:1px solid var(--h2a2a2a);border-radius:12px;padding:24px;width:100%;max-width:320px">
-    <div style="font-family:'Bebas Neue';font-size:20px;letter-spacing:2px;color:var(--ac);margin-bottom:20px">NY PROFIL</div>
+    <div id="pmodal-title" style="font-family:'Bebas Neue';font-size:20px;letter-spacing:2px;color:var(--ac);margin-bottom:20px">NY PROFIL</div>
     <input id="pname" class="field" placeholder="Navn (f.eks. Maria)" style="margin-bottom:16px"/>
     <div style="font-size:10px;color:var(--h555);letter-spacing:1px;margin-bottom:10px">VÆLG FARVE</div>
     <div id="color-picker" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
       <button class="btn-g" onclick="closeModal()" style="padding:10px;font-size:13px">ANNULLER</button>
-      <button class="btn-p" onclick="createProfile()" style="padding:10px;font-size:15px">OPRET</button>
+      <button id="pmodal-save" class="btn-p" onclick="saveProfile()" style="padding:10px;font-size:15px">OPRET</button>
     </div>
   </div>
 </div>
@@ -709,6 +711,7 @@ let curView="today",logEx=[],logNote="",openEx=null,unsubSess=null;
 let activeDaySelect=null,editingProgram=null,builderMode=null,catalogTab="RYG",logRating=null,logInfoEx=null,progEx=null;
 let wizStep=null,wizGoal=null,wizDays=null,userGoal=null,goalGuideOpen=false,swapEx=null,deloadUntil=null;
 let profiles={},activeProfile=null,histProfileId=null,selectedColor=null,weights={},progMode="kg";
+let editingProfileId=null;   // sat = modalen redigerer en profil i stedet for at oprette
 let exNotes={},sessionStart=null,calOffset=0;
 // Kropsmål & Ernæring (pr. profil)
 let nutri=null,waist={},weightNotes={},nutriStep=null,nutriForm={},nutriErr=null;
@@ -854,9 +857,9 @@ window.addCustomEx=addCustomEx;
 window.saveCustomProgram=saveCustomProgram;
 window.selectProfile=selectProfile;
 window.deleteProfile=deleteProfile;
-window.createProfile=createProfile;
+window.saveProfile=saveProfile;
 window.openModal=openModal;
-window.closeModal=()=>{document.getElementById("smodal").style.display="none";};
+window.closeModal=()=>{editingProfileId=null;document.getElementById("smodal").style.display="none";};
 window.backToProfiles=backToProfiles;
 window.selectColor=c=>{selectedColor=c;document.querySelectorAll(".color-dot").forEach(d=>{d.style.outline=d.dataset.color===c?"2px solid #fff":"none";});};
 
@@ -1002,6 +1005,7 @@ function renderProfileScreen(){
   let html="";
   Object.values(profiles).sort((a,b)=>(a.createdAt>b.createdAt?1:-1)).forEach(p=>{
     html+='<div class="profile-card" onclick="selectProfile(\''+p.id+'\')">'
+      +'<button class="profile-edit" onclick="event.stopPropagation();openModal(\''+p.id+'\')" title="Rediger navn og farve">✎</button>'
       +(multi?'<button class="profile-delete" onclick="event.stopPropagation();deleteProfile(\''+p.id+'\')" title="Slet">×</button>':'')
       +'<div class="profile-avatar" style="background:'+p.color+'20;color:'+p.color+'">'+esc(p.name.charAt(0).toUpperCase())+'</div>'
       +'<div class="profile-name">'+esc(p.name)+'</div>'
@@ -1014,22 +1018,35 @@ function renderProfileScreen(){
   grid.innerHTML=html;
 }
 
-function openModal(){
-  selectedColor=COLORS[0];
-  document.getElementById("pname").value="";
+function openModal(id){
+  const p=id?profiles[id]:null;
+  editingProfileId=p?id:null;
+  selectedColor=p?.color||COLORS[0];
+  document.getElementById("pname").value=p?p.name:"";
+  document.getElementById("pmodal-title").textContent=p?"REDIGER PROFIL":"NY PROFIL";
+  document.getElementById("pmodal-save").textContent=p?"GEM":"OPRET";
   const cp=document.getElementById("color-picker");
   cp.innerHTML=COLORS.map(c=>'<div class="color-dot" data-color="'+c+'" onclick="selectColor(\''+c+'\')" style="background:'+c+';outline:'+(c===selectedColor?"2px solid #fff":"none")+'"></div>').join("");
   document.getElementById("smodal").style.display="flex";
   setTimeout(()=>document.getElementById("pname").focus(),50);
 }
 
-async function createProfile(){
+async function saveProfile(){
   const name=document.getElementById("pname").value.trim();
   if(!name)return;
-  const id="p_"+Date.now();
-  const profile={name,color:selectedColor||COLORS[0],createdAt:new Date().toISOString()};
-  await setDoc(doc(db,"users",CU.uid,"profiles",id),profile);
-  profiles[id]={id,...profile};
+  const color=selectedColor||COLORS[0];
+  if(editingProfileId){
+    const id=editingProfileId;
+    await setDoc(doc(db,"users",CU.uid,"profiles",id),{name,color},{merge:true});
+    profiles[id]={...profiles[id],name,color};
+    if(activeProfile&&activeProfile.id===id){activeProfile=profiles[id];applyProfileAccent();}
+  } else {
+    const id="p_"+Date.now();
+    const profile={name,color,createdAt:new Date().toISOString()};
+    await setDoc(doc(db,"users",CU.uid,"profiles",id),profile);
+    profiles[id]={id,...profile};
+  }
+  editingProfileId=null;
   document.getElementById("smodal").style.display="none";
   renderProfileScreen();
 }

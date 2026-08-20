@@ -36,7 +36,7 @@ jobs:
       - name: Saml site-mappe (uden git/zip)
         run: |
           mkdir -p _site
-          rsync -a --exclude='.git' --exclude='.github' --exclude='_site' --exclude='*.zip' ./ _site/
+          rsync -a --exclude='.git' --exclude='.github' --exclude='_site' --exclude='*.zip' --exclude='tests' ./ _site/
 
       - name: Stempl build-id (så appen kan se at der er en ny version)
         run: |

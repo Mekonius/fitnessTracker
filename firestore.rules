@@ -2,12 +2,46 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Brugere kan KUN læse/skrive deres egne data (inkl. profiler, sessioner, vægt, programmer)
-    match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
     }
+    // En træningspartner er inviteret ind i ejerens data
+    function isMember(userId) {
+      return request.auth != null &&
+        exists(/databases/$(database)/documents/users/$(userId)/members/$(request.auth.uid));
+    }
+    function invite(code) {
+      return get(/databases/$(database)/documents/invites/$(code)).data;
+    }
+
+    // Selve brugerdokumentet: kun ejeren skriver, partneren må læse
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isMember(userId);
+      allow write: if isOwner(userId);
+    }
+
+    // Profiler, sessioner, vægt, programmer m.m. deles med partneren
     match /users/{userId}/{document=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read, write: if isOwner(userId) || isMember(userId);
+    }
+
+    // Medlemskab: man kan kun tilføje sig selv, og kun med en gyldig invitationskode
+    match /users/{userId}/members/{memberId} {
+      allow read: if isOwner(userId) || isMember(userId);
+      allow create: if request.auth != null
+        && request.auth.uid == memberId
+        && exists(/databases/$(database)/documents/invites/$(request.resource.data.code))
+        && invite(request.resource.data.code).owner == userId
+        && invite(request.resource.data.code).expires > request.time;
+      allow delete: if isOwner(userId) || request.auth.uid == memberId;
+    }
+
+    // Invitationer: ejeren opretter, den inviterede slår koden op og rydder den væk
+    match /invites/{code} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.resource.data.owner == request.auth.uid;
+      allow delete: if request.auth != null &&
+        (resource.data.owner == request.auth.uid || isMember(resource.data.owner));
     }
 
     // Delt øvelses-cache (billeder/instruktioner): alle må læse, kun admin må skrive

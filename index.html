@@ -764,6 +764,8 @@ let activeDaySelect=null,editingProgram=null,builderMode=null,catalogTab="RYG",l
 let wizStep=null,wizGoal=null,wizDays=null,userGoal=null,goalGuideOpen=false,swapEx=null,deloadUntil=null;
 let profiles={},activeProfile=null,histProfileId=null,selectedColor=null,weights={},progMode="kg";
 let editingProfileId=null;   // sat = modalen redigerer en profil i stedet for at oprette
+// Træningspartner: ROOT er den konto data hentes fra — egen eller den man er inviteret til
+let ROOT=null,members=[],inviteCode=null,ownerName=null,partnerErr=null;
 let exNotes={},sessionStart=null,calOffset=0;
 // Kropsmål & Ernæring (pr. profil)
 let nutri=null,waist={},weightNotes={},nutriStep=null,nutriForm={},nutriErr=null;
@@ -793,12 +795,12 @@ window.doSwap = (xi,newId)=>{
 window.startDeload=async()=>{
   const d=new Date();d.setDate(d.getDate()+7);
   deloadUntil=tds(d);
-  setDoc(doc(db,"users",CU.uid,"settings","split"),{deloadUntil},{merge:true}).catch(()=>{});
+  setDoc(doc(db,"users",ROOT,"settings","split"),{deloadUntil},{merge:true}).catch(()=>{});
   renderToday();
 };
 window.endDeload=async()=>{
   deloadUntil=null;
-  setDoc(doc(db,"users",CU.uid,"settings","split"),{deloadUntil:null},{merge:true}).catch(()=>{});
+  setDoc(doc(db,"users",ROOT,"settings","split"),{deloadUntil:null},{merge:true}).catch(()=>{});
   if(curView==="log"){initLog();renderLog();}else renderToday();
 };
 window.setProgEx = id=>{progEx=id;renderHistory();};
@@ -845,7 +847,7 @@ window.startRest=startRest;window.stopRest=stopRest;
 window.startRestSel=xi=>{const el=document.getElementById("rest-sel-"+xi);startRest(parseInt(el&&el.value)||60);};
 window.toggleEx = id=>{openEx=openEx===id?null:id;renderProgram();};
 // ── Tilføj/fjern øvelser i de indbyggede programmer ───────────────────────────
-const saveProgExt=()=>setDoc(doc(db,"users",CU.uid,"settings","progext"),progExt).catch(()=>{});
+const saveProgExt=()=>setDoc(doc(db,"users",ROOT,"settings","progext"),progExt).catch(()=>{});
 window.toggleProgAdd=()=>{progAddOpen=!progAddOpen;renderProgram();};
 window.setProgAddTab=g=>{progAddTab=g;renderProgram();};
 window.addExToProgram=(type,id,group)=>{
@@ -975,13 +977,18 @@ onAuthStateChanged(auth, async user=>{
   document.getElementById("sload").style.display="none";
   if(user){
     CU=user;
+    ROOT=user.uid;
+    try{
+      const me=await getDoc(doc(db,"users",user.uid));
+      if(me.exists()&&me.data().partnerOf)ROOT=me.data().partnerOf;
+    }catch(e){}
     maybeShowWelcome();
     await loadProfiles();
     await ensureDefaultProfile();
     showScreen("sprofile");
     renderProfileScreen();
   } else {
-    CU=null;activeProfile=null;
+    CU=null;ROOT=null;activeProfile=null;members=[];ownerName=null;
     if(unsubSess){unsubSess();unsubSess=null;}
     showScreen("sauth");
   }
@@ -1024,7 +1031,7 @@ function showScreen(id){
 
 // ── Profiles ──────────────────────────────────────────────────────────────────
 async function loadProfiles(){
-  const snap=await getDocs(collection(db,"users",CU.uid,"profiles"));
+  const snap=await getDocs(collection(db,"users",ROOT,"profiles"));
   profiles={};
   snap.forEach(d=>{profiles[d.id]={id:d.id,...d.data()};});
 }
@@ -1034,13 +1041,13 @@ async function ensureDefaultProfile(){
   const name=CU.displayName||CU.email.split("@")[0];
   const id="p_"+Date.now();
   const profile={name,color:COLORS[0],createdAt:new Date().toISOString()};
-  await setDoc(doc(db,"users",CU.uid,"profiles",id),profile);
+  await setDoc(doc(db,"users",ROOT,"profiles",id),profile);
   profiles[id]={id,...profile};
   // Migrate eksisterende sessioner (fra før profiler) ind i standardprofilen
   try{
-    const oldSnap=await getDocs(collection(db,"users",CU.uid,"sessions"));
+    const oldSnap=await getDocs(collection(db,"users",ROOT,"sessions"));
     const migrations=[];
-    oldSnap.forEach(d=>{migrations.push(setDoc(doc(db,"users",CU.uid,"profiles",id,"sessions",d.id),d.data()));});
+    oldSnap.forEach(d=>{migrations.push(setDoc(doc(db,"users",ROOT,"profiles",id,"sessions",d.id),d.data()));});
     if(migrations.length)await Promise.all(migrations);
   }catch(e){}
 }
@@ -1062,6 +1069,7 @@ function renderProfileScreen(){
     +'<div style="width:64px;height:64px;border-radius:50%;background:var(--h1a1a1a);display:flex;align-items:center;justify-content:center;font-size:28px;color:var(--h444)">+</div>'
     +'<div style="font-size:12px;color:var(--h555);letter-spacing:1px">Tilføj profil</div>'
     +'</div>';
+  if(ROOT===CU?.uid)html+='<div style="grid-column:1/-1;text-align:center;margin-top:10px;font-size:11px;color:var(--h444)">Har du en partnerkode? <span style="color:var(--ac);cursor:pointer" onclick="joinPartner()">Tilslut dig</span></div>';
   grid.innerHTML=html;
 }
 
@@ -1084,13 +1092,13 @@ async function saveProfile(){
   const color=selectedColor||COLORS[0];
   if(editingProfileId){
     const id=editingProfileId;
-    await setDoc(doc(db,"users",CU.uid,"profiles",id),{name,color},{merge:true});
+    await setDoc(doc(db,"users",ROOT,"profiles",id),{name,color},{merge:true});
     profiles[id]={...profiles[id],name,color};
     if(activeProfile&&activeProfile.id===id){activeProfile=profiles[id];applyProfileAccent();}
   } else {
     const id="p_"+Date.now();
     const profile={name,color,createdAt:new Date().toISOString()};
-    await setDoc(doc(db,"users",CU.uid,"profiles",id),profile);
+    await setDoc(doc(db,"users",ROOT,"profiles",id),profile);
     profiles[id]={id,...profile};
   }
   editingProfileId=null;
@@ -1102,10 +1110,10 @@ async function deleteProfile(id){
   if(Object.keys(profiles).length<=1){alert("Du skal have mindst én profil.");return;}
   if(!confirm("Slet profil og al dens træningsdata?"))return;
   try{
-    const snap=await getDocs(collection(db,"users",CU.uid,"profiles",id,"sessions"));
+    const snap=await getDocs(collection(db,"users",ROOT,"profiles",id,"sessions"));
     await Promise.all(snap.docs.map(d=>deleteDoc(d.ref)));
   }catch(e){}
-  await deleteDoc(doc(db,"users",CU.uid,"profiles",id));
+  await deleteDoc(doc(db,"users",ROOT,"profiles",id));
   delete profiles[id];
   renderProfileScreen();
 }
@@ -1133,7 +1141,7 @@ function backToProfiles(){
 
 function startListen(){
   if(unsubSess)unsubSess();
-  unsubSess=onSnapshot(collection(db,"users",CU.uid,"profiles",activeProfile.id,"sessions"),snap=>{
+  unsubSess=onSnapshot(collection(db,"users",ROOT,"profiles",activeProfile.id,"sessions"),snap=>{
     sessions={};snap.forEach(d=>{sessions[d.id]=d.data();});
     if(curView==="today")renderToday();
     if(curView==="history"&&histProfileId===activeProfile.id)renderHistContent(sessions);
@@ -1143,7 +1151,7 @@ function startListen(){
 async function loadExNotes(){
   exNotes={};
   try{
-    const snap=await getDoc(doc(db,"users",CU.uid,"profiles",activeProfile.id,"settings","exnotes"));
+    const snap=await getDoc(doc(db,"users",ROOT,"profiles",activeProfile.id,"settings","exnotes"));
     if(snap.exists())exNotes=snap.data()||{};
   }catch(e){}
 }
@@ -1152,7 +1160,7 @@ window.onExNote=(exId,el)=>{
   exNotes[exId]=el.value;
   clearTimeout(exNoteTimer);
   exNoteTimer=setTimeout(()=>{
-    setDoc(doc(db,"users",CU.uid,"profiles",activeProfile.id,"settings","exnotes"),exNotes).catch(()=>{});
+    setDoc(doc(db,"users",ROOT,"profiles",activeProfile.id,"settings","exnotes"),exNotes).catch(()=>{});
     const lbl=document.getElementById("autosavelbl");
     if(lbl){lbl.textContent="Gemt ✓";setTimeout(()=>{if(lbl)lbl.textContent="";},1500);}
   },1200);
@@ -1175,7 +1183,7 @@ syncThemeBtn();
 async function loadWeights(){
   weights={};weightNotes={};
   try{
-    const snap=await getDocs(collection(db,"users",CU.uid,"profiles",activeProfile.id,"weights"));
+    const snap=await getDocs(collection(db,"users",ROOT,"profiles",activeProfile.id,"weights"));
     snap.forEach(d=>{weights[d.id]=d.data().kg;if(d.data().note)weightNotes[d.id]=d.data().note;});
     if(curView==="today")renderToday();
   }catch(e){}
@@ -1186,7 +1194,7 @@ window.saveWeight=async()=>{
   if(!kg||kg<20||kg>400){if(el)el.value="";return;}
   const today=tds(new Date());
   weights[today]=kg;
-  setDoc(doc(db,"users",CU.uid,"profiles",activeProfile.id,"weights",today),{kg}).catch(()=>{});
+  setDoc(doc(db,"users",ROOT,"profiles",activeProfile.id,"weights",today),{kg}).catch(()=>{});
   renderToday();
 };
 function updateHdr(){
@@ -1641,7 +1649,7 @@ async function saveLog(silent=false){
   if(!silent&&btn){btn.disabled=true;btn.textContent="…";}
   const lbl=document.getElementById("autosavelbl");
   if(lbl)lbl.textContent="Gemmer…";
-  await setDoc(doc(db,"users",CU.uid,"profiles",activeProfile.id,"sessions",activeDate),data);
+  await setDoc(doc(db,"users",ROOT,"profiles",activeProfile.id,"sessions",activeDate),data);
   if(lbl)lbl.textContent="Gemt ✓";
   setTimeout(()=>{const l=document.getElementById("autosavelbl");if(l)l.textContent="";},2000);
   if(!silent&&btn){btn.textContent="Gemt ✓";setTimeout(()=>{if(btn){btn.disabled=false;btn.textContent="GEM TRÆNING";}},2000);}
@@ -1709,7 +1717,7 @@ function renderHistory(){
 async function loadHist(){
   let data=sessions;
   if(histProfileId!==activeProfile.id){
-    const snap=await getDocs(collection(db,"users",CU.uid,"profiles",histProfileId,"sessions"));
+    const snap=await getDocs(collection(db,"users",ROOT,"profiles",histProfileId,"sessions"));
     data={};snap.forEach(d=>{data[d.id]=d.data();});
   }
   renderHistContent(data);
@@ -1986,13 +1994,14 @@ function renderWizard(){
 // ── Settings / Split ─────────────────────────────────────────────────────────
 async function loadSettings(){
   const [settingsSnap,programsSnap,extSnap]=await Promise.all([
-    getDoc(doc(db,"users",CU.uid,"settings","split")),
-    getDocs(collection(db,"users",CU.uid,"programs")),
-    getDoc(doc(db,"users",CU.uid,"settings","progext"))
+    getDoc(doc(db,"users",ROOT,"settings","split")),
+    getDocs(collection(db,"users",ROOT,"programs")),
+    getDoc(doc(db,"users",ROOT,"settings","progext"))
   ]);
   customPrograms={};
   programsSnap.forEach(d=>{customPrograms[d.id]=d.data();});
   progExt=extSnap.exists()?(extSnap.data()||{}):{};
+  await loadPartner();
   userGoal=settingsSnap.exists()?(settingsSnap.data().goal||null):null;
   deloadUntil=settingsSnap.exists()?(settingsSnap.data().deloadUntil||null):null;
   if(deloadUntil&&deloadUntil<tds(new Date()))deloadUntil=null; // udløbet
@@ -2005,7 +2014,7 @@ async function loadSettings(){
   }
 }
 async function saveSplit(){
-  await setDoc(doc(db,"users",CU.uid,"settings","split"),{days:userSplit,goal:userGoal||null,deloadUntil:deloadUntil||null});
+  await setDoc(doc(db,"users",ROOT,"settings","split"),{days:userSplit,goal:userGoal||null,deloadUntil:deloadUntil||null});
   activeDaySelect=null;updateHdr();showView("today");
 }
 function applyPreset(name){userSplit={...PRESETS[name]};activeDaySelect=null;renderSettings();}
@@ -2015,7 +2024,7 @@ function editProgram(id){editingProgram={...customPrograms[id],id};builderMode=n
 async function deleteCustomProgram(id){
   if(!confirm('Slet programmet "'+(customPrograms[id]?.name||"")+'"? Dette kan ikke fortrydes.'))return;
   Object.keys(userSplit).forEach(d=>{if(userSplit[d]===id)delete userSplit[d];});
-  await Promise.all([deleteDoc(doc(db,"users",CU.uid,"programs",id)),setDoc(doc(db,"users",CU.uid,"settings","split"),{days:userSplit})]);
+  await Promise.all([deleteDoc(doc(db,"users",ROOT,"programs",id)),setDoc(doc(db,"users",ROOT,"settings","split"),{days:userSplit})]);
   delete customPrograms[id];renderSettings();
 }
 function renderSettings(){
@@ -2105,6 +2114,33 @@ function renderSettings(){
   const trainDays=Object.keys(userSplit).length;
   if(trainDays)h+='<div style="font-size:11px;color:var(--h555);margin-bottom:16px">'+trainDays+' træningsdage pr. uge</div>';
   h+='<button class="btn-p"'+(trainDays?'':' disabled')+' onclick="saveSplit()">GEM PLAN</button>';
+  // Træningspartner
+  h+='<div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--h1a1a1a)">';
+  h+='<div style="font-size:10px;color:var(--h444);letter-spacing:2px;margin-bottom:10px">TRÆNINGSPARTNER</div>';
+  if(partnerErr)h+='<div style="background:var(--h1a0808);border:1px solid #ff444430;border-radius:8px;padding:11px 14px;margin-bottom:12px;font-size:12px;color:#ff8080">'+esc(partnerErr)+'</div>';
+  if(ROOT!==CU.uid){
+    h+='<div class="sbox" style="padding:14px 16px">'
+      +'<div style="font-size:12px;color:var(--he0dcd4);line-height:1.7">Du træner sammen med '+esc(ownerName||"din partner")+'. I deler plan, programmer og profiler — hver profil har sin egen historik.</div>'
+      +'<button class="btn-g" style="width:auto;padding:7px 14px;font-size:11px;margin-top:12px" onclick="leavePartner()">FORLAD FÆLLES DATA</button></div>';
+  } else {
+    members.forEach(m=>{
+      h+='<div class="hrow" style="display:flex;align-items:center;gap:10px">'
+        +'<div style="flex:1"><div style="font-size:13px;color:var(--he0dcd4)">'+esc(m.name||m.email||"Partner")+'</div>'
+        +'<div style="font-size:11px;color:var(--h444);margin-top:2px">Har adgang til jeres fælles data</div></div>'
+        +'<button class="btn-g" style="width:auto;padding:6px 12px;font-size:11px" onclick="removeMember(\''+m.uid+'\')">FJERN</button></div>';
+    });
+    if(inviteCode){
+      h+='<div class="sbox" style="padding:14px 16px">'
+        +'<div style="font-size:11px;color:var(--h555);line-height:1.7;margin-bottom:12px">Giv koden til din partner. Hun logger ind med sin egen Google-konto og indtaster den under Plan. Koden holder et døgn.</div>'
+        +'<div style="font-family:\'Bebas Neue\';font-size:32px;letter-spacing:6px;color:var(--ac);text-align:center;margin-bottom:12px">'+inviteCode+'</div>'
+        +'<button class="btn-g" style="width:auto;padding:7px 14px;font-size:11px" onclick="cancelInvite()">ANNULLÉR INVITATION</button></div>';
+    } else {
+      h+='<div style="font-size:11px;color:var(--h555);line-height:1.7;margin-bottom:10px">Inviter din partner, så I ser de samme profiler, plan og programmer fra hver jeres telefon.</div>'
+        +'<button class="btn-g" style="width:auto;padding:8px 16px;font-size:12px" onclick="makeInvite()">INVITÉR PARTNER</button>';
+    }
+    if(!members.length)h+='<div style="margin-top:14px;font-size:11px;color:var(--h444)">Har du selv fået en kode? <span style="color:var(--ac);cursor:pointer" onclick="joinPartner()">Tilslut dig her</span></div>';
+  }
+  h+='</div>';
   // Version + manuelt opdateringstjek
   h+='<div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--h1a1a1a);display:flex;align-items:center;gap:10px">'
     +'<span id="updtxt" style="flex:1;font-size:10px;color:var(--h2e2e2e);letter-spacing:1px">VERSION '+(STAMPED?BUILD.slice(0,7).toUpperCase():"LOKAL")+'</span>'
@@ -2151,7 +2187,7 @@ async function saveCustomProgram(){
   const id=editingProgram.id||("prog_"+Date.now().toString(36)+Math.random().toString(36).slice(2,5));
   const data={name:editingProgram.name,color:editingProgram.color||"var(--ac)",
     exercises:(editingProgram.exercises||[]).map(ex=>({...ex,sets:parseInt(ex.sets)||3,reps:String(ex.reps||"12"),rest:String(ex.rest||"60s")}))};
-  await setDoc(doc(db,"users",CU.uid,"programs",id),data);
+  await setDoc(doc(db,"users",ROOT,"programs",id),data);
   customPrograms[id]=data;editingProgram=null;builderMode=null;showView("settings");
 }
 function renderBuilder(){
@@ -2253,8 +2289,68 @@ function renderBuilder(){
   document.getElementById("vbuilder").innerHTML=h;
 }
 
+// ── Træningspartner ───────────────────────────────────────────────────────────
+// Partneren logger ind med sin egen konto og får adgang til ejerens data, så
+// begge telefoner viser de samme profiler, plan og programmer.
+async function loadPartner(){
+  members=[];ownerName=null;
+  try{
+    const snap=await getDocs(collection(db,"users",ROOT,"members"));
+    snap.forEach(d=>members.push({uid:d.id,...d.data()}));
+    if(ROOT!==CU.uid){
+      const o=await getDoc(doc(db,"users",ROOT));
+      ownerName=o.exists()?(o.data().name||o.data().email||null):null;
+    }
+  }catch(e){}
+}
+const INV_CHARS="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";   // uden 0/O og 1/I
+const newCode=()=>Array.from({length:8},()=>INV_CHARS[Math.floor(Math.random()*INV_CHARS.length)]).join("");
+window.makeInvite=async()=>{
+  partnerErr=null;
+  const code=newCode();
+  try{
+    await setDoc(doc(db,"invites",code),{owner:CU.uid,expires:new Date(Date.now()+86400000),createdAt:new Date().toISOString()});
+    inviteCode=code;
+  }catch(e){partnerErr="Kunne ikke lave invitationen ("+(e.code||e.message)+").";}
+  renderSettings();
+};
+window.cancelInvite=async()=>{
+  if(inviteCode){try{await deleteDoc(doc(db,"invites",inviteCode));}catch(e){}}
+  inviteCode=null;partnerErr=null;renderSettings();
+};
+window.joinPartner=async()=>{
+  const raw=prompt("Indtast partnerkoden");
+  if(!raw)return;
+  const code=raw.trim().toUpperCase();
+  partnerErr=null;
+  try{
+    const inv=await getDoc(doc(db,"invites",code));
+    if(!inv.exists()){partnerErr="Koden findes ikke — tjek den igen.";renderSettings();return;}
+    const owner=inv.data().owner;
+    if(owner===CU.uid){partnerErr="Det er din egen kode.";renderSettings();return;}
+    await setDoc(doc(db,"users",owner,"members",CU.uid),
+      {code,name:CU.displayName||"",email:CU.email||"",since:new Date().toISOString()});
+    await setDoc(doc(db,"users",CU.uid),{partnerOf:owner},{merge:true});
+    try{await deleteDoc(doc(db,"invites",code));}catch(e){}
+    location.reload();
+  }catch(e){partnerErr="Kunne ikke tilslutte ("+(e.code||e.message)+"). Er koden udløbet?";renderSettings();}
+};
+window.leavePartner=async()=>{
+  if(!confirm("Forlad de fælles data? Du får din egen tomme app igen — intet bliver slettet hos din partner."))return;
+  try{
+    await deleteDoc(doc(db,"users",ROOT,"members",CU.uid));
+    await setDoc(doc(db,"users",CU.uid),{partnerOf:null},{merge:true});
+  }catch(e){}
+  location.reload();
+};
+window.removeMember=async(uid)=>{
+  if(!confirm("Fjern partnerens adgang til dine data?"))return;
+  try{await deleteDoc(doc(db,"users",ROOT,"members",uid));}catch(e){}
+  members=members.filter(m=>m.uid!==uid);renderSettings();
+};
+
 // ── Kropsmål & Ernæring ───────────────────────────────────────────────────────
-const nutriDoc=()=>doc(db,"users",CU.uid,"profiles",activeProfile.id,"settings","nutrition");
+const nutriDoc=()=>doc(db,"users",ROOT,"profiles",activeProfile.id,"settings","nutrition");
 const kcalTxt=n=>Math.round(n).toLocaleString("da-DK");
 const kgTxt=n=>(Math.round(n*10)/10).toLocaleString("da-DK",{minimumFractionDigits:1});
 const latestOf=map=>{const d=Object.keys(map).sort();return d.length?map[d[d.length-1]]:null;};
@@ -2264,7 +2360,7 @@ async function loadNutrition(){
   try{
     const [nSnap,wSnap]=await Promise.all([
       getDoc(nutriDoc()),
-      getDocs(collection(db,"users",CU.uid,"profiles",activeProfile.id,"waist"))
+      getDocs(collection(db,"users",ROOT,"profiles",activeProfile.id,"waist"))
     ]);
     if(nSnap.exists())nutri=nSnap.data();
     wSnap.forEach(d=>{waist[d.id]=d.data().cm;});
@@ -2579,7 +2675,7 @@ window.nutriSave=()=>{
   const today=tds(new Date());
   if(p.inputs.weightKg&&weights[today]==null){
     weights[today]=p.inputs.weightKg;
-    setDoc(doc(db,"users",CU.uid,"profiles",activeProfile.id,"weights",today),{kg:p.inputs.weightKg}).catch(()=>{});
+    setDoc(doc(db,"users",ROOT,"profiles",activeProfile.id,"weights",today),{kg:p.inputs.weightKg}).catch(()=>{});
   }
   nutriStep=null;nutriErr=null;renderNutrition();
 };
@@ -2590,7 +2686,7 @@ window.nutriSaveWeight=()=>{
   const note=(nEl?.value||"").trim(),today=tds(new Date());
   weights[today]=kg;
   if(note)weightNotes[today]=note;else delete weightNotes[today];
-  setDoc(doc(db,"users",CU.uid,"profiles",activeProfile.id,"weights",today),note?{kg,note}:{kg}).catch(()=>{});
+  setDoc(doc(db,"users",ROOT,"profiles",activeProfile.id,"weights",today),note?{kg,note}:{kg}).catch(()=>{});
   nutriErr=null;renderNutrition();
 };
 window.nutriSaveWaist=()=>{
@@ -2599,7 +2695,7 @@ window.nutriSaveWaist=()=>{
   if(!cm||cm<40||cm>250)return nutriFail("Indtast et taljemål mellem 40 og 250 cm.");
   const today=tds(new Date());
   waist[today]=cm;
-  setDoc(doc(db,"users",CU.uid,"profiles",activeProfile.id,"waist",today),{cm}).catch(()=>{});
+  setDoc(doc(db,"users",ROOT,"profiles",activeProfile.id,"waist",today),{cm}).catch(()=>{});
   nutriErr=null;renderNutrition();
 };
 window.nutriApplyAdjust=()=>{

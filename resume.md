@@ -72,6 +72,21 @@ profilkort med initial + farve, skift via badge øverst.
   prefilles fra planen. Ingen Apple Health/Health Connect i projektet, så skridt
   indtastes manuelt.
 
+## Træningspartner (delt data på to telefoner)
+- `ROOT` er den konto data hentes fra: egen uid, eller partnerens hvis eget
+  brugerdokument har `partnerOf`. Alle 29 Firestore-stier bruger `ROOT`.
+- Ejeren laver en invitation under Plan → koden gemmes i `invites/{kode}` med
+  `{owner, expires}` (24 timer). Partneren logger ind med sin egen Google-konto,
+  indtaster koden og hendes app skriver `users/{ejer}/members/{hendes-uid}` +
+  `partnerOf` på hendes eget dokument, hvorefter invitationen slettes.
+- Firestore-reglerne giver adgang hvis `request.auth.uid == userId` ELLER der
+  findes et medlemsdokument. Medlemskab kan kun oprettes for én selv og kun med
+  en gyldig, ikke-udløbet kode. Ingen Cloud Functions.
+- Adgangen går begge veje og er fuld: partneren kan også rette i ejerens data.
+  Ejeren kan fjerne en partner igen under Plan; partneren kan selv forlade.
+- **Reglerne deployes ikke af GitHub Actions** — de skal udgives i Firebase
+  Console (eller med `firebase deploy --only firestore:rules`).
+
 ## Opdatering (så man ikke skal slette genvejen)
 - CI stempler samme git-sha i `<meta name="build">` og i `version.txt`.
 - Appen henter `version.txt` med `no-store` ved opstart og hver gang den kommer i
@@ -100,6 +115,8 @@ Beslutninger:
 3. iOS: bliv på PWA (gjort) vs native skal om web-appen vs rigtig native app.
    Native gevinst = Apple Health (skridt + vægt) og baggrundstimer.
 4. Notifikationer via web push (kræver Firebase Cloud Messaging).
+5. Firestore-reglerne for træningspartner skal udgives i Firebase Console, før
+   en partner kan tilslutte sig.
 
 Funktionshuller:
 5. Indbyggede programmer: kun tilføjede øvelser kan fjernes. Indbyggede øvelser

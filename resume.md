@@ -28,7 +28,8 @@ profilkort med initial + farve, skift via badge øverst.
 - Den aktive profils farve er appens accent: logo, aktiv fane, primærknapper,
   nøgletal, links og glow-rammen om appen. Accentvariablerne (`--ac` m.fl.)
   sættes ud fra profilfarven i `applyProfileAccent()`; i lyst tema mørknes den
-  (42 % blandet med næsten-sort) for læsbarhed. Program-typernes farver og
+  (32 % blandet med næsten-sort), så selv de lyseste profilfarver har mindst
+  6:1 i kontrast mod sandbaggrunden. Profilkort og badge bruger samme mørkning. Program-typernes farver og
   advarsler er uændrede.
 - Kanten sidder kun i venstre og højre side, aldrig i top og bund: i mørkt tema
   to lysende striber (gradienter), i lyst tema en 5px streg. Begge tegnes i CSS

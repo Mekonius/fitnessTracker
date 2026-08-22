@@ -1020,7 +1020,7 @@ function applyProfileAccent(){
   if(!activeProfile){ACCENT_VARS.forEach(v=>st.removeProperty(v));return;}
   const light=document.documentElement.getAttribute("data-theme")==="light";
   const mix=(a,p,b)=>"color-mix(in srgb,"+a+" "+p+"%,"+b+")";
-  const base=light?mix(activeProfile.color,42,"#14110a"):activeProfile.color;
+  const base=light?mix(activeProfile.color,32,"#14110a"):activeProfile.color;
   const tint=p=>mix(base,p,light?"#ffffff":"#0e0e0e");
   st.setProperty("--ac",base);
   [["--ac3",19],["--ac4",25],["--ac5",31],["--ac55",33],["--ac6",38]]
@@ -1068,6 +1068,9 @@ async function ensureDefaultProfile(){
   }catch(e){}
 }
 
+// Profilfarven som den skal vises i det aktuelle tema
+const profColor=c=>document.documentElement.getAttribute("data-theme")==="light"
+  ? "color-mix(in srgb,"+c+" 32%,#14110a)" : c;
 function renderProfileScreen(){
   const grid=document.getElementById("profile-grid");
   if(!grid)return;
@@ -1077,7 +1080,7 @@ function renderProfileScreen(){
     html+='<div class="profile-card" onclick="selectProfile(\''+p.id+'\')">'
       +'<button class="profile-edit" onclick="event.stopPropagation();openModal(\''+p.id+'\')" title="Rediger navn og farve">✎</button>'
       +(multi?'<button class="profile-delete" onclick="event.stopPropagation();deleteProfile(\''+p.id+'\')" title="Slet">×</button>':'')
-      +'<div class="profile-avatar" style="background:'+p.color+'20;color:'+p.color+'">'+esc(p.name.charAt(0).toUpperCase())+'</div>'
+      +'<div class="profile-avatar" style="background:color-mix(in srgb,'+profColor(p.color)+' 13%,transparent);color:'+profColor(p.color)+'">'+esc(p.name.charAt(0).toUpperCase())+'</div>'
       +'<div class="profile-name">'+esc(p.name)+'</div>'
       +'</div>';
   });
@@ -1138,8 +1141,8 @@ async function selectProfile(id){
   activeProfile=profiles[id];
   histProfileId=id;
   const av=document.getElementById("pbadge-avatar");
-  av.style.background="color-mix(in srgb,"+activeProfile.color+" 13%,transparent)";
-  av.style.color=activeProfile.color;
+  av.style.background="color-mix(in srgb,var(--ac) 13%,transparent)";
+  av.style.color="var(--ac)";
   av.textContent=activeProfile.name.charAt(0).toUpperCase();
   document.getElementById("pbadge-name").textContent=activeProfile.name;
   showScreen("sapp");

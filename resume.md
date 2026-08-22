@@ -30,8 +30,9 @@ profilkort med initial + farve, skift via badge øverst.
   sættes ud fra profilfarven i `applyProfileAccent()`; i lyst tema mørknes den
   (42 % blandet med næsten-sort) for læsbarhed. Program-typernes farver og
   advarsler er uændrede.
-- Rammen er et glow uden streg. På iPhone runder den hjørnerne (64px) og fader
-  ud over de øverste 10 % via en maske, så den står som et U.
+- Kanten er to lysende striber i venstre og højre side (gradienter på `#pframe`,
+  ingen streg, intet i bund og top). På iPhone fader striberne ud over de
+  øverste 10 % via en maske.
 - Lyst/mørkt tema med toggle.
 - Programbygger: egne programmer med øvelser fra katalog, egne øvelser eller
   kopieret fra et andet program.

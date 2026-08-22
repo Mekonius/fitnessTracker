@@ -76,10 +76,10 @@ input:focus,textarea:focus{border-color:var(--ac)!important}
 .add-profile-card{background:var(--h0e0e0e);border:1px dashed var(--h2a2a2a);border-radius:12px;padding:28px 20px;display:flex;flex-direction:column;align-items:center;gap:12px;cursor:pointer;transition:all .2s}
 .add-profile-card:hover{border-color:var(--ac55);background:var(--h111)}
 .color-dot{width:28px;height:28px;border-radius:50%;cursor:pointer;outline-offset:2px}
-/* Ramme i den aktive profils farve — et blødt glow, ingen streg */
+/* To lysende striber i den aktive profils farve — venstre og højre kant */
 #pframe{display:none;position:fixed;inset:0;pointer-events:none;z-index:400}
-/* iPhone: glowet runder hjørnerne og trækkes op over kanten, så toppen er åben — et stort U */
-:root[data-iphone] #pframe{border-radius:0 0 64px 64px;
+/* iPhone: striberne fader ud over de øverste 10 % */
+:root[data-iphone] #pframe{
   -webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 10%);mask-image:linear-gradient(to bottom,transparent 0,#000 10%)}
 </style>
 </head>
@@ -970,7 +970,8 @@ function showScreen(id){
     fr.style.display=vis?"block":"none";
     if(vis){
       const g=p=>"color-mix(in srgb,var(--ac) "+p+"%,transparent)";
-      fr.style.boxShadow="inset 0 0 7px "+g(72)+",inset 0 0 18px "+g(40)+",inset 0 0 40px "+g(16);
+      fr.style.background="linear-gradient(to right,"+g(72)+","+g(30)+" 5px,transparent 24px),"
+        +"linear-gradient(to left,"+g(72)+","+g(30)+" 5px,transparent 24px)";
     }
   }
 }

@@ -34,9 +34,13 @@ profilkort med initial + farve, skift via badge øverst.
   ingen streg, intet i bund og top). På iPhone fader striberne ud over de
   øverste 10 % via en maske.
 - Lyst/mørkt tema med toggle.
-- Indbyggede programmer: træk, skub, ben, helkrop, overkrop, underkrop og core.
-  CORE er en kort session (~15 min) tænkt som tillæg på en hvile- eller
-  træningsdag.
+- Indbyggede programmer: træk, skub, ben, helkrop, overkrop, underkrop, core,
+  mobilitet og crossfit. CORE og MOBILITET er korte sessioner tænkt som tillæg
+  på en hvile- eller træningsdag.
+- Katalogets grupper er muskelgrupper plus MOBILITET og CROSSFIT. Kun de syv
+  muskelgrupper (`MUSCLE_GRPS`) tæller i uge-analysen: crossfit-øvelser mappes
+  til den muskelgruppe de reelt træner, og mobilitet/sjipning holdes helt ude
+  (`NO_VOLUME`), så de hverken giver falsk volumen eller "umappet"-advarsler.
 - Programbygger: egne programmer med øvelser fra katalog, egne øvelser eller
   kopieret fra et andet program.
 - Øvelser kan tilføjes til de indbyggede programmer under Program-fanen

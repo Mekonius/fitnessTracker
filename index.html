@@ -328,7 +328,11 @@ const PRESETS = {
   "PPL":       {1:"SKUB",3:"TRAEK",5:"BEN"},
   "PUSH/PULL": {1:"SKUB",4:"TRAEK"},
   // 3 dage med vægte i centret, resten hjemme: styrke uden udstyr og mobilitet
-  "HJEMME3":   {1:"HELKROP",2:"HJEMME",3:"HELKROP",4:"MOBIL",5:"HELKROP",6:"HJEMME",0:"MOBIL"}
+  "HJEMME3":   {1:"HELKROP",2:"HJEMME",3:"HELKROP",4:"MOBIL",5:"HELKROP",6:"HJEMME",0:"MOBIL"},
+  // Rammer 100 i program-analysen: alle syv muskelgrupper på 10-20 sæt og
+  // mindst 2 dage om ugen. Fire træningsdage kan ikke ligge uden at to støder
+  // op til hinanden i en uge — her er det ryg, hvor overlappet er mindst.
+  "PERFEKT":   {1:"HELKROP",2:"MOBIL",3:"OVERKROP",4:"CROSSFIT",5:"MOBIL",6:"HJEMME",0:"MOBIL"}
 };
 const CATALOG = {
   "RYG":[
@@ -500,8 +504,10 @@ PROG.MOBIL={
 PROG.CROSSFIT={
   label:"CROSSFIT DAG",short:"CROSS",color:"var(--t-cross)",bgColor:"var(--h0a2a2a)",
   desc:"Eksplosiv cirkeltræning — tag øvelserne i runder med kort pause imellem",
-  ex:[pickEx("kb_swing",4),pickEx("burpee",4),pickEx("wall_ball",4),pickEx("box_jump",3),
-      pickEx("thruster",3),pickEx("rope_jump",3)].filter(Boolean)
+  // Balanceret: træk med (pull-ups) og færre ben-dominerede sæt, så et pas kan
+  // ligge i en uge sammen med rigtig styrketræning uden at sprænge ben-volumen
+  ex:[pickEx("kb_swing",3),pickEx("pullup",3),pickEx("thruster",2),pickEx("burpee",2),
+      pickEx("slam_ball",2),pickEx("rope_jump",3)].filter(Boolean)
 };
 PROG.HJEMME={
   label:"HJEMME",short:"HJEM",color:"var(--t-hjemme)",bgColor:"var(--h1a1e24)",
@@ -2074,6 +2080,7 @@ function renderSettings(){
   h+='<button class="btn-g" style="width:auto;padding:10px 18px" onclick="applyPreset(\'PPL\')">PPL · 3 dage</button>';
   h+='<button class="btn-g" style="width:auto;padding:10px 18px" onclick="applyPreset(\'PUSH/PULL\')">Push/Pull · 2 dage</button>';
   h+='<button class="btn-g" style="width:auto;padding:10px 18px" onclick="applyPreset(\'HJEMME3\')">Vægte + hjemme · 7 dage</button>';
+  h+='<button class="btn-g" style="width:auto;padding:10px 18px" onclick="applyPreset(\'PERFEKT\')">100-planen · 7 dage</button>';
   h+='</div></div>';
   h+='<div style="margin-bottom:8px"><div style="font-size:10px;color:var(--h444);letter-spacing:1.5px;margin-bottom:12px">DAGE</div>';
   h+='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:12px">';

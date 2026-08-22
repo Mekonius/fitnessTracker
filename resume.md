@@ -42,8 +42,12 @@ profilkort med initial + farve, skift via badge øverst.
   muskelgrupper (`MUSCLE_GRPS`) tæller i uge-analysen: crossfit-øvelser mappes
   til den muskelgruppe de reelt træner, og mobilitet/sjipning holdes helt ude
   (`NO_VOLUME`), så de hverken giver falsk volumen eller "umappet"-advarsler.
-- Presets i Plan: PPL (3 dage), Push/Pull (2 dage) og "Vægte + hjemme"
-  (7 dage: 3× helkrop i centret, 2× hjemme uden udstyr, 2× mobilitet).
+- Presets i Plan: PPL (3 dage), Push/Pull (2 dage), "Vægte + hjemme" (7 dage:
+  3× helkrop, 2× hjemme, 2× mobilitet — score 80) og "100-planen" (helkrop,
+  overkrop, crossfit, hjemme + 3 mobilitetsdage — score 100 i analysen).
+- CROSSFIT indeholder pull-ups og færre ben-dominerede sæt, så et pas kan ligge
+  i samme uge som rigtig styrketræning. Uden trækøvelser gav programmet 18 sæt
+  ben og nul biceps, og så var 100 i analysen umuligt med crossfit i planen.
 - Programbygger: egne programmer med øvelser fra katalog, egne øvelser eller
   kopieret fra et andet program.
 - Øvelser kan tilføjes til de indbyggede programmer under Program-fanen

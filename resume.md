@@ -31,7 +31,7 @@ profilkort med initial + farve, skift via badge øverst.
   (42 % blandet med næsten-sort) for læsbarhed. Program-typernes farver og
   advarsler er uændrede.
 - Kanten sidder kun i venstre og højre side, aldrig i top og bund: i mørkt tema
-  to lysende striber (gradienter), i lyst tema en 2px streg. Begge tegnes i CSS
+  to lysende striber (gradienter), i lyst tema en 5px streg. Begge tegnes i CSS
   ud fra `--ac`, så temaskift slår igennem med det samme. På iPhone fader kanten
   ud over de øverste 10 % via en maske.
 - Lyst/mørkt tema med toggle.

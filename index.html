@@ -76,8 +76,12 @@ input:focus,textarea:focus{border-color:var(--ac)!important}
 .add-profile-card{background:var(--h0e0e0e);border:1px dashed var(--h2a2a2a);border-radius:12px;padding:28px 20px;display:flex;flex-direction:column;align-items:center;gap:12px;cursor:pointer;transition:all .2s}
 .add-profile-card:hover{border-color:var(--ac55);background:var(--h111)}
 .color-dot{width:28px;height:28px;border-radius:50%;cursor:pointer;outline-offset:2px}
-/* To lysende striber i den aktive profils farve — venstre og højre kant */
-#pframe{display:none;position:fixed;inset:0;pointer-events:none;z-index:400}
+/* Mørkt tema: to lysende striber i den aktive profils farve i venstre og højre kant */
+#pframe{display:none;position:fixed;inset:0;pointer-events:none;z-index:400;
+  background:linear-gradient(to right,color-mix(in srgb,var(--ac) 72%,transparent),color-mix(in srgb,var(--ac) 30%,transparent) 5px,transparent 24px),
+             linear-gradient(to left,color-mix(in srgb,var(--ac) 72%,transparent),color-mix(in srgb,var(--ac) 30%,transparent) 5px,transparent 24px)}
+/* Lyst tema: intet glow — bare en 2px kant i øst og vest */
+:root[data-theme="light"] #pframe{background:none;border-left:2px solid var(--ac);border-right:2px solid var(--ac)}
 /* iPhone: striberne fader ud over de øverste 10 % */
 :root[data-iphone] #pframe{
   -webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 10%);mask-image:linear-gradient(to bottom,transparent 0,#000 10%)}
@@ -1014,13 +1018,7 @@ function showScreen(id){
   applyProfileAccent();
   const fr=document.getElementById("pframe");
   if(fr){
-    const vis=id==="sapp"&&activeProfile;
-    fr.style.display=vis?"block":"none";
-    if(vis){
-      const g=p=>"color-mix(in srgb,var(--ac) "+p+"%,transparent)";
-      fr.style.background="linear-gradient(to right,"+g(72)+","+g(30)+" 5px,transparent 24px),"
-        +"linear-gradient(to left,"+g(72)+","+g(30)+" 5px,transparent 24px)";
-    }
+    fr.style.display=(id==="sapp"&&activeProfile)?"block":"none";
   }
 }
 

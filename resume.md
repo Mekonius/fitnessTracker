@@ -30,9 +30,10 @@ profilkort med initial + farve, skift via badge øverst.
   sættes ud fra profilfarven i `applyProfileAccent()`; i lyst tema mørknes den
   (42 % blandet med næsten-sort) for læsbarhed. Program-typernes farver og
   advarsler er uændrede.
-- Kanten er to lysende striber i venstre og højre side (gradienter på `#pframe`,
-  ingen streg, intet i bund og top). På iPhone fader striberne ud over de
-  øverste 10 % via en maske.
+- Kanten sidder kun i venstre og højre side, aldrig i top og bund: i mørkt tema
+  to lysende striber (gradienter), i lyst tema en 2px streg. Begge tegnes i CSS
+  ud fra `--ac`, så temaskift slår igennem med det samme. På iPhone fader kanten
+  ud over de øverste 10 % via en maske.
 - Lyst/mørkt tema med toggle.
 - Indbyggede programmer: træk, skub, ben, helkrop, overkrop, underkrop, core,
   mobilitet og crossfit. CORE og MOBILITET er korte sessioner tænkt som tillæg

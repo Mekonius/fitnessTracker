@@ -34,6 +34,9 @@ profilkort med initial + farve, skift via badge øverst.
   ingen streg, intet i bund og top). På iPhone fader striberne ud over de
   øverste 10 % via en maske.
 - Lyst/mørkt tema med toggle.
+- Indbyggede programmer: træk, skub, ben, helkrop, overkrop, underkrop og core.
+  CORE er en kort session (~15 min) tænkt som tillæg på en hvile- eller
+  træningsdag.
 - Programbygger: egne programmer med øvelser fra katalog, egne øvelser eller
   kopieret fra et andet program.
 - Øvelser kan tilføjes til de indbyggede programmer under Program-fanen

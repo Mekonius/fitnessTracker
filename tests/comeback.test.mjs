@@ -4,14 +4,15 @@ import assert from "node:assert/strict";
 import {
   COMEBACK, COMEBACK_KEY, COMEBACK_WEEKS, SESSIONS, phaseOfWeek, sessionById,
   sessionByLetter, sessionForWeek, cardioForWeek, loadForWeek, weekPlan,
-  splitForWeek, weekSetUpdates, programDocs, isComebackProgram, comebackProgramIds
+  splitForWeek, weekSetUpdates, programDocs, isComebackProgram, comebackProgramIds,
+  exercisesToAdd, planChanges
 } from "../comeback.js";
 
 // ── Programmets identitet ─────────────────────────────────────────────────────
 test("programmet har ét stabilt id og et dansk navn", () => {
   assert.equal(COMEBACK_KEY, "athletic-comeback-falktoft-6w");
   assert.equal(COMEBACK.name, "Athletic Comeback – Falktoft-inspireret");
-  assert.equal(COMEBACK.version, 1);
+  assert.equal(COMEBACK.version, 2);
   assert.equal(COMEBACK_WEEKS, 6);
 });
 test("de tre pas har hver sit stabile id afledt af nøglen", () => {
@@ -214,4 +215,53 @@ test("hvert pas har mindst tre øvelser og rimelige pauser", () => {
     assert.ok(s.exercises.length >= 3, s.letter);
     s.exercises.forEach(ex => assert.match(ex.rest, /^\d+s$/));
   });
+});
+
+// ── Skulder og arme ───────────────────────────────────────────────────────────
+test("programmet har direkte skulder-, triceps- og bicepsarbejde", () => {
+  const ids = SESSIONS.flatMap(s => s.exercises.map(e => e.id));
+  ["shoulder_press", "tricep_pushdown", "cable_curl"].forEach(id => assert.ok(ids.includes(id), id));
+});
+test("de nye øvelser starter også på 2 sæt i uge 1–2", () => {
+  ["A", "B"].forEach(l => sessionForWeek(sessionByLetter(l).id, 1).exercises
+    .forEach(ex => assert.equal(ex.sets, 2, l + "/" + ex.id)));
+});
+test("nye programmer seedes med alle øvelser og nuværende version", () => {
+  const docs = programDocs(() => ({}));
+  assert.equal(docs.find(d => d.id.endsWith("_b")).exercises.length, 7);
+  docs.forEach(d => assert.equal(d.comebackVersion, 2));
+  docs.forEach(d => assert.deepEqual(exercisesToAdd(d, () => ({})), []));
+});
+test("gamle programmer får kun de nye øvelser — ikke noget brugeren har slettet", () => {
+  const v1 = programDocs(() => ({}), 1).find(d => d.id.endsWith("_b"));
+  v1.comebackVersion = 1;
+  v1.exercises = v1.exercises.filter(e => e.id !== "shoulder_press" && e.id !== "cable_curl" && e.id !== "dead_bug");
+  const add = exercisesToAdd(v1, () => ({}), 1);
+  assert.deepEqual(add.map(e => e.id), ["shoulder_press", "cable_curl"]);   // dead_bug er fra v1 og kommer ikke tilbage
+  add.forEach(e => assert.equal(e.sets, 2));
+});
+test("fremmede programmer får aldrig tilføjet noget", () => {
+  assert.deepEqual(exercisesToAdd({ name: "Mit eget", exercises: [] }, () => ({})), []);
+});
+
+// ── Hvad planknappen ændrer ───────────────────────────────────────────────────
+test("planChanges viser hvilke dage der bliver erstattet", () => {
+  const a = sessionByLetter("A").id, b = sessionByLetter("B").id;
+  const ch = planChanges(1, { 1: "HELKROP", 3: "OVERKROP", 5: "MOBIL" });
+  assert.deepEqual(ch.map(c => [c.dayName, c.from, c.to]), [["Mandag", "HELKROP", a], ["Fredag", "MOBIL", b]]);
+});
+test("planChanges rører ikke onsdag i uge 1–2 hvis den er en anden plan", () => {
+  assert.ok(!planChanges(1, { 3: "OVERKROP" }).some(c => c.day === 3));
+});
+test("planChanges melder at konditionspasset fjernes fra onsdag i uge 1–2", () => {
+  const c = sessionByLetter("C").id;
+  const ch = planChanges(1, { 3: c }, x => x).filter(x => x.day === 3);
+  assert.deepEqual(ch, [{ day: 3, dayName: "Onsdag", from: c, to: null }]);
+});
+test("planChanges er tom når planen allerede passer", () => {
+  assert.deepEqual(planChanges(3, splitForWeek(3)), []);
+});
+test("planChanges bruger labelOf til visningsnavne", () => {
+  const ch = planChanges(3, { 1: "HELKROP" }, x => x.toLowerCase());
+  assert.equal(ch.find(c => c.day === 1).from, "helkrop");
 });

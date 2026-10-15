@@ -241,7 +241,7 @@ import { NGOALS, plan, entriesFromMap, weightTrend, recommendedAdjustment,
          recompSignal, strengthChangePct }                from './nutrition.js';
 import { COMEBACK, COMEBACK_WEEKS, sessionForWeek, cardioForWeek, loadForWeek,
          weekPlan, splitForWeek, weekSetUpdates, programDocs,
-         comebackProgramIds }                            from './comeback.js';
+         comebackProgramIds, exercisesToAdd, planChanges } from './comeback.js';
 
 const app  = initializeApp({
   apiKey:"AIzaSyDyyEOWezeMnrcAmCZgtbjI0wh5GpYGkSg",
@@ -798,7 +798,7 @@ let exNotes={},sessionStart=null,calOffset=0;
 // Kropsmål & Ernæring (pr. profil)
 let nutri=null,waist={},weightNotes={},nutriStep=null,nutriForm={},nutriErr=null;
 // Athletic Comeback (ugen gemmes pr. profil)
-let comeback=null,comebackErr=null;
+let comeback=null,comebackErr=null,comebackInfo=null,comebackOpenEx=null;
 const COLORS=["#c8ff00","#5bc8ff","#ff8c5b","#c85bff","#ff5b8c","#5bffc8","#ffd75b","#ff5b5b"];
 const REP_SCHEMES=[[6,6,6],[8,8,8],[10,10,10],[12,10,8],[15,12,10],[5,5,5,5]];
 
@@ -1836,7 +1836,10 @@ const IMG_ALIAS={
   hip_thrust:"barbell hip thrust",bulgarian:"split squat with dumbbells",
   plank:"plank",russian_twist:"russian twist",
   leg_raise:"flat bench lying leg raise",crunch:"crunches",
-  side_plank:"side bridge",ab_wheel:"ab roller"
+  side_plank:"side bridge",ab_wheel:"ab roller",
+  incline_pushup:"incline push-up",goblet_squat_bench:"goblet squat",
+  pallof_press:"pallof press",dead_bug:"dead bug",glute_bridge:"butt lift (bridge)",
+  bike_steady:"bicycling, stationary",walk_flat:"walking, treadmill"
 };
 let FEDB=null,fedbPromise=null;
 function loadFEDB(){
@@ -2436,6 +2439,9 @@ function renderComeback(){
     +'<div style="font-size:12px;color:var(--h555);margin-top:5px">'+esc(COMEBACK.subtitle)+'</div></div>';
   h+=comebackSafety();
   if(comebackErr)h+='<div style="background:var(--h1a0808);border:1px solid #ff444430;border-radius:8px;padding:11px 14px;margin-bottom:14px;font-size:12px;color:#ff8080">'+esc(comebackErr)+'</div>';
+  if(comebackInfo)h+='<div style="background:var(--h1d1408);border:1px solid var(--ac4);border-radius:8px;padding:11px 14px;margin-bottom:14px;font-size:12px;color:var(--he0dcd4);line-height:1.7;white-space:pre-line">'+esc(comebackInfo)+'</div>';
+  const pending=added?comebackProgramIds().filter(id=>exercisesToAdd({...customPrograms[id],id},catalogDef,w).length):[];
+  if(pending.length)h+='<div class="sbox" style="padding:14px 16px;margin-bottom:14px"><div style="font-size:12px;color:var(--he0dcd4);line-height:1.7;margin-bottom:10px">Programmet har fået skulder- og armøvelser (skulderpres, triceps pushdown og bicepscurl). De ligger ikke i dine gemte pas endnu.</div><button class="btn-p" onclick="comebackUpgrade()">TILFØJ DE NYE ØVELSER</button><div style="font-size:11px;color:var(--h444);line-height:1.7;margin-top:8px">Øvelserne lægges nederst i passene. Dine egne øvelser, vægte og rettelser røres ikke.</div></div>';
   h+='<div style="font-size:12px;color:var(--h777);line-height:1.8;margin-bottom:18px">'+esc(COMEBACK.desc)+'</div>';
 
   if(!added){
@@ -2473,7 +2479,11 @@ function renderComeback(){
     if(!s.cardio||!d.optional){
       h+='<div style="font-size:11px;color:var(--h555);line-height:1.9">';
       s.exercises.forEach((ex,i)=>{
-        h+=(i+1)+'. '+esc(ex.name||(catalogDef(ex.id)||{}).name||ex.id)+' — '+ex.sets+'×'+esc(ex.reps)+'<br>';
+        const key=d.id+"|"+ex.id,open=comebackOpenEx===key,nm=ex.name||(catalogDef(ex.id)||{}).name||ex.id;
+        h+='<div style="cursor:pointer" onclick="comebackToggleEx(\''+key+'\')">'+(i+1)+'. '+esc(nm)+' — '+ex.sets+'×'+esc(ex.reps)
+          +' <span style="color:var(--ac);font-size:10px">'+(open?'▲':'▼')+'</span></div>';
+        if(open)h+='<div style="padding:8px 0 10px"><div id="cbgif-'+ex.id+'"></div>'
+          +(ex.tip?'<div style="font-size:11px;color:var(--h888);line-height:1.7">'+esc(ex.tip)+'</div>':'')+'</div>';
       });
       h+='</div>';
     }
@@ -2493,7 +2503,12 @@ function renderComeback(){
     +'<div style="font-size:12px;color:var(--h777);line-height:1.8">Stop passet, sæt eller læg dig sikkert ned. '+esc(COMEBACK.emergency)+'</div></div>';
   h+='<button class="btn-g" style="margin-top:16px" onclick="showView(\'today\')">← TILBAGE TIL OVERBLIK</button>';
   el.innerHTML=h;
+  if(comebackOpenEx){
+    const [sid,eid]=comebackOpenEx.split("|"),ex=(sessionForWeek(sid,w)||{exercises:[]}).exercises.find(e=>e.id===eid);
+    if(ex)loadGifForExercise(eid,ex.name||eid,"cbgif-"+eid);
+  }
 }
+window.comebackToggleEx=key=>{comebackOpenEx=comebackOpenEx===key?null:key;renderComeback();};
 
 // ── Handlinger ────────────────────────────────────────────────────────────────
 // Seed: opretter kun de pas, der ikke findes i forvejen — aldrig dubletter, og
@@ -2522,9 +2537,35 @@ window.comebackSetWeek=w=>{
 // Lægger ugens pas på mandag/onsdag/fredag. Andre dage står urørt.
 window.comebackApplyPlan=async()=>{
   const w=comebackWeek(),plan=splitForWeek(w),cId=comebackProgramIds()[1];
+  comebackErr=null;comebackInfo=null;
+  const changes=planChanges(w,userSplit,typeLabel);
+  if(!changes.length){comebackInfo="Din plan har allerede uge "+w+"s pas på de rigtige dage.";renderComeback();return;}
+  const txt=changes.map(c=>c.dayName+": "+(c.from||"ingen træning")+" → "+(c.to||"fri")).join("\n");
+  if(!confirm("Dette ændrer din plan:\n\n"+txt+"\n\nAndre dage røres ikke. Fortsæt?"))return;
+  const prev=userSplit;
   userSplit={...userSplit,...plan};
   if(!plan[3]&&userSplit[3]===cId)delete userSplit[3];   // onsdag er fri i uge 1-2
-  await saveSplit();
+  try{
+    await saveSplit();
+    comebackInfo="Planen er opdateret:\n"+txt;
+  }catch(e){userSplit=prev;comebackErr="Kunne ikke gemme planen ("+(e.code||e.message)+").";}
+  showView("comeback");
+};
+// Tilføjer kun de øvelser, der er kommet til siden passet blev gemt
+window.comebackUpgrade=async()=>{
+  const w=comebackWeek();comebackErr=null;comebackInfo=null;
+  try{
+    for(const id of comebackProgramIds()){
+      const prog=customPrograms[id];if(!prog)continue;
+      const add=exercisesToAdd({...prog,id},catalogDef,w);
+      if(!add.length)continue;
+      const data={...prog,exercises:[...(prog.exercises||[]),...add],comebackVersion:COMEBACK.version};
+      await setDoc(doc(db,"users",ROOT,"programs",id),data);
+      customPrograms[id]=data;
+    }
+    comebackInfo="De nye øvelser er lagt nederst i passene.";
+  }catch(e){comebackErr="Kunne ikke opdatere programmerne ("+(e.code||e.message)+").";}
+  renderComeback();
 };
 // Sætter sæt og reps til den valgte uge. Kun programmets egne øvelser røres,
 // så egne tilføjelser, vægte og rettelser bliver stående.

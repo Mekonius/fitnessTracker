@@ -218,6 +218,7 @@ input:focus,textarea:focus{border-color:var(--ac)!important}
     <div id="vtoday"></div>
     <div id="vprogram" style="display:none"></div>
     <div id="vnutrition" style="display:none"></div>
+    <div id="vcomeback" style="display:none"></div>
     <div id="vlog"     style="display:none"></div>
     <div id="vhistory" style="display:none"></div>
     <div id="vsettings" style="display:none"></div>
@@ -238,6 +239,9 @@ import { getFirestore, collection, doc,
          setDoc, getDoc, getDocs, deleteDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 import { NGOALS, plan, entriesFromMap, weightTrend, recommendedAdjustment,
          recompSignal, strengthChangePct }                from './nutrition.js';
+import { COMEBACK, COMEBACK_WEEKS, sessionForWeek, cardioForWeek, loadForWeek,
+         weekPlan, splitForWeek, weekSetUpdates, programDocs,
+         comebackProgramIds }                            from './comeback.js';
 
 const app  = initializeApp({
   apiKey:"AIzaSyDyyEOWezeMnrcAmCZgtbjI0wh5GpYGkSg",
@@ -348,12 +352,17 @@ const CATALOG = {
   ],
   "BRYST":[
     {id:"chest_press",  name:"Chest Press",        machine:"Brystpres maskine / bænkpres",       muscles:"Pectoralis major + triceps + forreste skulder",tip:"Hold skuldrene nede. Klem brystet.",                    sets:4,reps:"12-15",rest:"60s"},
+    {id:"incline_pushup",name:"Incline Push-up",     machine:"Stabil bænk eller bordkant",        muscles:"Bryst + triceps + core",                 tip:"Hænderne på bænken, krop i én linje. Jo højere støtte, jo lettere — start højt.", sets:2,reps:"8",rest:"90s"},
     {id:"incline_press",name:"Incline Press",       machine:"Skrå bænkpres / maskine",            muscles:"Øvre bryst + forreste skulder",         tip:"Fokus øvre bryst. Klem i toppen.",                               sets:3,reps:"12-15",rest:"60s"},
     {id:"decline_press",name:"Decline Press",       machine:"Nedadgående bænkpres",               muscles:"Nedre bryst + triceps",                  tip:"Kontrolleret ned. Fokus nedre bryst.",                           sets:3,reps:"12-15",rest:"60s"},
     {id:"pec_deck",     name:"Pec Deck / Butterfly",machine:"Pec Deck maskine",                   muscles:"Indre bryst",                            tip:"Let bøj i albuerne. Klem brystet i midten.",                     sets:3,reps:"15",rest:"45s"},
     {id:"cable_fly",    name:"Cable Fly",           machine:"Kabelmaskine",                       muscles:"Pectoralis major + forreste skulder",    tip:"Bøjede arme. Tænk på at kramme nogen.",                          sets:3,reps:"15",rest:"45s"},
     {id:"pushup",       name:"Push-up",             machine:"Ingen — kropsvægt",                  muscles:"Bryst + triceps + skulder",              tip:"Krop som et bræt. Brystet til gulvet.",                          sets:3,reps:"Max",rest:"60s"},
     {id:"dips_chest",   name:"Dips (brystfokus)",  machine:"Dips stativ",                        muscles:"Nedre bryst + triceps",                  tip:"Læn dig fremover for mere brystaktivering.",                     sets:3,reps:"Max",rest:"75s"}
+  ],
+  "KONDITION":[
+    {id:"bike_steady",      name:"Motionscykel",      machine:"Motionscykel",                      muscles:"Kondition — hjerte, kredsløb og ben",    tip:"Rolig til jævn intensitet: du skal kunne tale i hele sætninger. Let at stoppe når som helst.", sets:1,reps:"20 min",rest:"—",isTime:true,unit:"MIN"},
+    {id:"walk_flat",        name:"Rolig gang",        machine:"Plant underlag",                    muscles:"Kondition — hjerte og kredsløb",         tip:"Jævnt tempo på fladt underlag. Alternativ til cyklen, hvis den ikke er ledig.", sets:1,reps:"20 min",rest:"—",isTime:true,unit:"MIN"}
   ],
   "SKULDER":[
     {id:"shoulder_press",name:"Shoulder Press",    machine:"Skulderpres maskine / håndvægte",    muscles:"Forreste + midtre skulderdel + triceps",  tip:"Pres direkte op. Skuldrene væk fra ørerne.",                    sets:3,reps:"12-15",rest:"60s"},
@@ -383,6 +392,7 @@ const CATALOG = {
     {id:"leg_curl",         name:"Leg Curl",          machine:"Leg curl maskine",                  muscles:"Hamstrings (baglår)",                    tip:"Hofterne nede. Fuld bevægelsesbane.",                            sets:3,reps:"12-15",rest:"60s"},
     {id:"leg_extension",    name:"Leg Extension",     machine:"Leg extension maskine",             muscles:"Quadriceps (forlår)",                    tip:"Fuld stræk. Kontrolleret ned.",                                  sets:3,reps:"15",rest:"45s"},
     {id:"glute_bridge",     name:"Glutebro",          machine:"Gulvet — ingen udstyr",             muscles:"Baller (glutes) + baglår",               tip:"Pres gennem hælene og klem ballerne i toppen. Hold et sekund før du sænker.", sets:3,reps:"15",rest:"45s"},
+    {id:"goblet_squat_bench",name:"Goblet Squat til bænk",machine:"Håndvægt eller kropsvægt + bænk", muscles:"Quadriceps + glutes",                   tip:"Sæt dig roligt ned til bænken bag dig og rejs dig igen. Bænken er en stabil dybdemarkør.", sets:2,reps:"8",rest:"120s"},
     {id:"calf_raise",       name:"Calf Raises",       machine:"Calf raise maskine / trappetrin",   muscles:"Gastrocnemius + soleus (læg)",           tip:"Helt op og helt ned. Hold 1 sek i toppen.",                      sets:4,reps:"20",rest:"30s"},
     {id:"lunge",            name:"Lunges",            machine:"Håndvægte / kropsvægt",             muscles:"Quadriceps + glutes + balance",          tip:"Stort skridt frem. Bagknæet næsten til gulvet.",                 sets:3,reps:"12/ben",rest:"60s"},
     {id:"hip_thrust",       name:"Hip Thrust",        machine:"Bænk + stang / maskine",            muscles:"Glutes (primært) + hamstrings",          tip:"Klem ballerne i toppen. Hold 1 sek.",                            sets:4,reps:"12-15",rest:"60s"},
@@ -414,6 +424,8 @@ const CATALOG = {
     {id:"leg_raise",        name:"Leg Raise",         machine:"Bænk / hængende",                   muscles:"Nedre mavemuskler",                      tip:"Lad ikke ryggen løfte fra bænken.",                              sets:3,reps:"12-15",rest:"45s"},
     {id:"crunch",           name:"Crunches",          machine:"Gulvet / kabelmaskine",             muscles:"Rectus abdominis",                       tip:"Løft skuldrene — ikke nakken. Ekspirer i toppen.",               sets:3,reps:"20",rest:"30s"},
     {id:"side_plank",       name:"Side Planke",       machine:"Gulvet",                            muscles:"Obliques + core stabilisatorer",         tip:"Hofterne oppe. Krop i én ret linje.",                            sets:3,reps:"30s/side",rest:"30s",isTime:true},
+    {id:"pallof_press",     name:"Pallof Press",      machine:"Kabeltårn i brysthøjde",            muscles:"Dyb core + skrå mavemuskler",            tip:"Stå sidelæns til kablet, pres hænderne lige frem og lad være med at dreje. Let modstand er nok.", sets:2,reps:"10/side",rest:"90s"},
+    {id:"dead_bug",         name:"Dead Bug",          machine:"Gulvet — ingen udstyr",             muscles:"Dyb core + lændestabilitet",             tip:"Lænden bliver i gulvet. Sænk modsat arm og ben roligt, og træk vejret hele vejen.", sets:2,reps:"8/side",rest:"60s"},
     {id:"ab_wheel",         name:"Ab Wheel / Rollout",machine:"Ab wheel",                          muscles:"Hele core + lats",                       tip:"Stram core hårdt. Gå kun så langt ud du kan kontrollere.",       sets:3,reps:"10",rest:"60s"}
   ]
 };
@@ -528,7 +540,7 @@ Object.entries(CATALOG).forEach(([grp,exs])=>exs.forEach(ex=>{EX_MUSCLE[ex.id]=g
 Object.assign(EX_MUSCLE,{kb_swing:"BEN",burpee:"BEN",wall_ball:"BEN",box_jump:"BEN",
   thruster:"BEN",slam_ball:"CORE",farmers_walk:"CORE"});
 // Mobilitet og ren kondition er ikke styrkevolumen — de holdes ude af analysen
-const NO_VOLUME=new Set([...CATALOG.MOBILITET.map(e=>e.id),"rope_jump"]);
+const NO_VOLUME=new Set([...CATALOG.MOBILITET.map(e=>e.id),...CATALOG.KONDITION.map(e=>e.id),"rope_jump"]);
 NO_VOLUME.forEach(id=>delete EX_MUSCLE[id]);
 
 // Sekundære muskelgrupper pr. øvelse — compound-øvelser træner mere end én
@@ -751,7 +763,7 @@ function getProgram(type){
     return extra.length?{...PROG[type],ex:[...PROG[type].ex,...extra]}:PROG[type];
   }
   const cp=customPrograms[type];
-  if(cp)return{label:cp.name.toUpperCase(),color:cp.color||"var(--ac)",bgColor:"var(--h2a1c08)",desc:"",ex:cp.exercises||[]};
+  if(cp)return{label:cp.name.toUpperCase(),color:cp.color||"var(--ac)",bgColor:"var(--h2a1c08)",desc:cp.desc||"",ex:cp.exercises||[]};
   return null;
 }
 const buildDef=type=>{const p=getProgram(type);return p?p.ex.map(e=>({id:e.id,name:e.name,sets:Array.from({length:e.sets||3},iSet)})):[];};
@@ -785,6 +797,8 @@ let ROOT=null,members=[],inviteCode=null,ownerName=null,partnerErr=null;
 let exNotes={},sessionStart=null,calOffset=0;
 // Kropsmål & Ernæring (pr. profil)
 let nutri=null,waist={},weightNotes={},nutriStep=null,nutriForm={},nutriErr=null;
+// Athletic Comeback (ugen gemmes pr. profil)
+let comeback=null,comebackErr=null;
 const COLORS=["#c8ff00","#5bc8ff","#ff8c5b","#c85bff","#ff5b8c","#5bffc8","#ffd75b","#ff5b5b"];
 const REP_SCHEMES=[[6,6,6],[8,8,8],[10,10,10],[12,10,8],[15,12,10],[5,5,5,5]];
 
@@ -1165,7 +1179,7 @@ function startListen(){
     if(curView==="today")renderToday();
     if(curView==="history"&&histProfileId===activeProfile.id)renderHistContent(sessions);
   });
-  loadWeights();loadExNotes();loadNutrition();
+  loadWeights();loadExNotes();loadNutrition();loadComeback();
 }
 async function loadExNotes(){
   exNotes={};
@@ -1225,7 +1239,7 @@ function updateHdr(){
 // ── View ──────────────────────────────────────────────────────────────────────
 function showView(v){
   curView=v;
-  ["today","program","log","history","settings","builder","nutrition"].forEach(n=>{
+  ["today","program","log","history","settings","builder","nutrition","comeback"].forEach(n=>{
     document.getElementById("v"+n).style.display=n===v?"block":"none";
     const t=document.getElementById("nav-"+n);if(t)t.className="tab"+(n===v?" active":"");
   });
@@ -1236,6 +1250,7 @@ function showView(v){
   else if(v==="settings")renderSettings();
   else if(v==="builder"){editingProgram=editingProgram||{name:"",exercises:[],color:"var(--ac)"};builderMode=null;renderBuilder();}
   else if(v==="nutrition")renderNutrition();
+  else if(v==="comeback")renderComeback();
 }
 
 function typeLabel(t){if(PROG[t])return PROG[t].label.replace(/\s*DAG$/,"");return customPrograms[t]?.name||t;}
@@ -1291,6 +1306,7 @@ function renderToday(){
   if(streak>0)h+='<div style="text-align:center;flex-shrink:0"><div style="font-size:20px;line-height:1">🔥</div><div style="font-size:10px;color:var(--ac);letter-spacing:1px;margin-top:3px">'+streak+' UGE'+(streak>1?"R":"")+'</div></div>';
   h+='</div></div>';
   h+=nutriCard();
+  h+=comebackCard();
   // ── Kropsvægt ──
   const wDates=Object.keys(weights).sort();
   h+='<div style="margin-bottom:24px"><div style="font-size:10px;color:var(--h444);letter-spacing:2px;margin-bottom:10px">KROPSVÆGT</div>';
@@ -1524,7 +1540,7 @@ function renderLog(){
     }
     h+='<div style="display:grid;grid-template-columns:28px 1fr 1fr 28px;gap:5px;margin-bottom:6px">'
       +'<span></span><span style="font-size:10px;color:var(--h444);text-align:center;letter-spacing:1px">REPS</span>'
-      +'<span style="font-size:10px;color:var(--h444);text-align:center;letter-spacing:1px">'+(def.isTime?"SEK":"KG")+'</span><span></span></div>';
+      +'<span style="font-size:10px;color:var(--h444);text-align:center;letter-spacing:1px">'+(def.unit||(def.isTime?"SEK":"KG"))+'</span><span></span></div>';
     ex.sets.forEach((set,si)=>{
       h+='<div style="display:grid;grid-template-columns:28px 1fr 1fr 28px;gap:5px;margin-bottom:5px;align-items:center">'
         +'<span style="font-size:11px;color:var(--h333);text-align:center">S'+(si+1)+'</span>'
@@ -2368,6 +2384,167 @@ window.removeMember=async(uid)=>{
   if(!confirm("Fjern partnerens adgang til dine data?"))return;
   try{await deleteDoc(doc(db,"users",ROOT,"members",uid));}catch(e){}
   members=members.filter(m=>m.uid!==uid);renderSettings();
+};
+
+// ── Athletic Comeback ─────────────────────────────────────────────────────────
+// Programmet ligger som tre almindelige egne programmer, så de kan redigeres,
+// tildeles dage og logges som alt andet i appen. Ugen (1-6) gemmes pr. profil.
+const comebackDoc=()=>doc(db,"users",ROOT,"profiles",activeProfile.id,"settings","comeback");
+const comebackWeek=()=>Math.min(Math.max(Math.round(comeback?.week||1),1),COMEBACK_WEEKS);
+const comebackAdded=()=>!!comeback&&comebackProgramIds().every(id=>!!customPrograms[id]);
+
+async function loadComeback(){
+  comeback=null;
+  try{
+    const snap=await getDoc(comebackDoc());
+    if(snap.exists())comeback=snap.data();
+  }catch(e){}
+  if(curView==="today")renderToday();else if(curView==="comeback")renderComeback();
+}
+
+// Kort på I dag-fanen
+function comebackCard(){
+  const added=comebackAdded();
+  let h='<div style="margin-bottom:24px"><div style="font-size:10px;color:var(--h444);letter-spacing:2px;margin-bottom:10px">ATHLETIC COMEBACK</div>';
+  h+='<div class="sbox" style="padding:14px 16px;cursor:pointer" onclick="showView(\'comeback\')">';
+  if(added){
+    const w=comebackWeek(),plan=weekPlan(w);
+    h+='<div style="display:flex;align-items:baseline;gap:10px">'
+      +'<span style="font-family:\'Bebas Neue\';font-size:26px;color:var(--ac);line-height:1">UGE '+w+'</span>'
+      +'<span style="font-size:11px;color:var(--h555)">af '+COMEBACK_WEEKS+'</span>'
+      +'<span style="flex:1"></span><span style="font-size:14px;color:var(--h444)">›</span></div>';
+    h+='<div style="font-size:11px;color:var(--h666);margin-top:8px;line-height:1.7">'
+      +plan.map(d=>d.dayName.slice(0,3)+" "+d.letter+(d.optional?" (valgfri)":"")).join(" · ")+'</div>';
+  } else {
+    h+='<div style="font-size:12px;color:var(--h666);line-height:1.7;margin-bottom:12px">'+esc(COMEBACK.subtitle)
+      +' — to helkropspas og et konditionspas, der bygges op lidt ad gangen.</div>'
+      +'<span style="font-size:11px;color:var(--ac);letter-spacing:1px">SE PROGRAMMET →</span>';
+  }
+  h+='</div></div>';
+  return h;
+}
+
+const comebackSafety=()=>'<div style="background:var(--h1a1400);border:1px solid #ffd75b40;border-radius:8px;padding:14px 16px;margin-bottom:16px">'
+  +'<div style="font-size:11px;color:var(--t-helkrop);letter-spacing:1px;margin-bottom:6px">'+esc(COMEBACK.safetyTitle.toUpperCase())+'</div>'
+  +'<div style="font-size:12px;color:#a08030;line-height:1.8">'+esc(COMEBACK.safety)+'</div></div>';
+
+function renderComeback(){
+  const el=document.getElementById("vcomeback");if(!el)return;
+  const added=comebackAdded(),w=comebackWeek();
+  let h='<div style="margin-bottom:16px">'
+    +'<div style="font-family:\'Bebas Neue\';font-size:28px;letter-spacing:2px;color:var(--ac);line-height:1.1">ATHLETIC COMEBACK</div>'
+    +'<div style="font-size:12px;color:var(--h555);margin-top:5px">'+esc(COMEBACK.subtitle)+'</div></div>';
+  h+=comebackSafety();
+  if(comebackErr)h+='<div style="background:var(--h1a0808);border:1px solid #ff444430;border-radius:8px;padding:11px 14px;margin-bottom:14px;font-size:12px;color:#ff8080">'+esc(comebackErr)+'</div>';
+  h+='<div style="font-size:12px;color:var(--h777);line-height:1.8;margin-bottom:18px">'+esc(COMEBACK.desc)+'</div>';
+
+  if(!added){
+    h+='<div class="sbox" style="padding:14px 16px;margin-bottom:16px">';
+    weekPlan(1).forEach(d=>{
+      const s=sessionForWeek(d.id,1);
+      h+='<div style="margin-bottom:12px"><div style="font-size:12px;color:var(--he0dcd4)">'+esc(d.dayName)+' · '+esc(s.name)+'</div>'
+        +'<div style="font-size:11px;color:var(--h555);line-height:1.6;margin-top:3px">'+esc(s.desc)+'</div></div>';
+    });
+    h+='<div style="font-size:11px;color:var(--h444);line-height:1.7;margin-top:4px">Udstyr: '+esc(COMEBACK.equipment)+'</div></div>';
+    h+='<button class="btn-p" onclick="comebackAdd()">TILFØJ PROGRAMMET</button>';
+    h+='<div style="font-size:11px;color:var(--h444);line-height:1.7;margin-top:10px">Programmet bliver gemt som tre almindelige programmer, du selv kan rette i. Det lægger ikke noget i din plan, før du beder om det.</div>';
+    h+='<button class="btn-g" style="margin-top:16px" onclick="showView(\'today\')">← TILBAGE</button>';
+    el.innerHTML=h;return;
+  }
+
+  // ── Ugevælger ──
+  h+='<div style="font-size:10px;color:var(--h444);letter-spacing:2px;margin-bottom:8px">UGE</div><div style="margin-bottom:10px">';
+  for(let i=1;i<=COMEBACK_WEEKS;i++)
+    h+='<span class="chip'+(i===w?" active":"")+'" onclick="comebackSetWeek('+i+')">'+i+'</span>';
+  h+='</div>';
+  h+='<div style="font-size:12px;color:var(--h777);line-height:1.8;margin-bottom:18px">'+esc(loadForWeek(w))+'</div>';
+
+  // ── Ugens pas ──
+  weekPlan(w).forEach(d=>{
+    const s=sessionForWeek(d.id,w);
+    h+='<div class="sbox" style="padding:14px 16px;margin-bottom:10px'+(d.optional?';opacity:.65':'')+'">';
+    h+='<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px">'
+      +'<span style="font-size:10px;color:var(--h444);letter-spacing:1.5px;width:62px;flex-shrink:0">'+esc(d.dayName.toUpperCase())+'</span>'
+      +'<span style="font-size:13px;color:var(--he0dcd4);flex:1">'+esc(s.name)+'</span>'
+      +(d.optional?'<span style="font-size:10px;color:var(--h555)">VALGFRI</span>':'')+'</div>';
+    if(d.optional)h+='<div style="font-size:11px;color:var(--h555);line-height:1.7;margin-bottom:8px">Konditionspasset starter i uge 3. Uge 1–2 er hviledag eller sædvanlig let aktivitet, hvis du er symptomfri.</div>';
+    const c=s.cardio?cardioForWeek(w):null;
+    if(c)h+='<div style="font-size:12px;color:var(--he0dcd4);margin-bottom:8px">'+esc(c.label)+' · '+esc(c.segments)+'</div>';
+    if(!s.cardio||!d.optional){
+      h+='<div style="font-size:11px;color:var(--h555);line-height:1.9">';
+      s.exercises.forEach((ex,i)=>{
+        h+=(i+1)+'. '+esc(ex.name||(catalogDef(ex.id)||{}).name||ex.id)+' — '+ex.sets+'×'+esc(ex.reps)+'<br>';
+      });
+      h+='</div>';
+    }
+    h+='<div style="font-size:11px;color:var(--h555);line-height:1.7;margin-top:8px">Opvarmning: '+esc(s.warmup)+'</div>';
+    h+='</div>';
+  });
+
+  h+='<div style="font-size:11px;color:var(--h555);line-height:1.8;margin:14px 0 18px">'+esc(COMEBACK.restNote)+'</div>';
+
+  // ── Handlinger — begge kræver et tryk, intet sker af sig selv ──
+  h+='<button class="btn-p" onclick="comebackApplyPlan()">LÆG UGE '+w+' I MIN PLAN</button>';
+  h+='<button class="btn-g" style="margin-top:8px" onclick="comebackApplyWeek()">SÆT PROGRAMMERNE TIL UGE '+w+'</button>';
+  h+='<div style="font-size:11px;color:var(--h444);line-height:1.7;margin-top:10px">Appen ændrer aldrig dine vægte eller sæt af sig selv. Du bestemmer selv, hvornår du går videre — og gentager hellere en uge, hvis du har været syg, sprunget pas over eller haft symptomer.</div>';
+
+  h+='<div style="margin-top:22px;padding-top:16px;border-top:1px solid var(--h1a1a1a)">'
+    +'<div style="font-size:10px;color:var(--h444);letter-spacing:2px;margin-bottom:8px">HVIS DU FÅR SYMPTOMER</div>'
+    +'<div style="font-size:12px;color:var(--h777);line-height:1.8">Stop passet, sæt eller læg dig sikkert ned. '+esc(COMEBACK.emergency)+'</div></div>';
+  h+='<button class="btn-g" style="margin-top:16px" onclick="showView(\'today\')">← TILBAGE TIL OVERBLIK</button>';
+  el.innerHTML=h;
+}
+
+// ── Handlinger ────────────────────────────────────────────────────────────────
+// Seed: opretter kun de pas, der ikke findes i forvejen — aldrig dubletter, og
+// rører aldrig et pas brugeren selv har rettet i.
+window.comebackAdd=async()=>{
+  comebackErr=null;
+  try{
+    for(const d of programDocs(id=>catalogDef(id))){
+      if(customPrograms[d.id])continue;
+      const {id,...data}=d;
+      await setDoc(doc(db,"users",ROOT,"programs",id),data);
+      customPrograms[id]=data;
+    }
+    comeback={week:comeback?.week||1,
+      addedAt:comeback?.addedAt||new Date().toISOString(),
+      updatedAt:new Date().toISOString()};
+    await setDoc(comebackDoc(),comeback);
+  }catch(e){comebackErr="Kunne ikke gemme programmet ("+(e.code||e.message)+").";}
+  renderComeback();
+};
+window.comebackSetWeek=w=>{
+  comeback={...(comeback||{}),week:w,updatedAt:new Date().toISOString()};
+  setDoc(comebackDoc(),comeback).catch(()=>{});
+  comebackErr=null;renderComeback();
+};
+// Lægger ugens pas på mandag/onsdag/fredag. Andre dage står urørt.
+window.comebackApplyPlan=async()=>{
+  const w=comebackWeek(),plan=splitForWeek(w),cId=comebackProgramIds()[1];
+  userSplit={...userSplit,...plan};
+  if(!plan[3]&&userSplit[3]===cId)delete userSplit[3];   // onsdag er fri i uge 1-2
+  await saveSplit();
+};
+// Sætter sæt og reps til den valgte uge. Kun programmets egne øvelser røres,
+// så egne tilføjelser, vægte og rettelser bliver stående.
+window.comebackApplyWeek=async()=>{
+  const w=comebackWeek(),upd=weekSetUpdates(w);
+  if(!confirm("Sæt øvelserne i de tre comeback-pas til uge "+w+"? Dine egne øvelser og rettelser bliver stående."))return;
+  comebackErr=null;
+  try{
+    for(const id of comebackProgramIds()){
+      const prog=customPrograms[id];if(!prog)continue;
+      const exercises=(prog.exercises||[]).map(ex=>{
+        const u=upd[id]&&upd[id][ex.id];
+        return u?{...ex,sets:u.sets,reps:u.reps}:ex;
+      });
+      const data={...prog,exercises};
+      await setDoc(doc(db,"users",ROOT,"programs",id),data);
+      customPrograms[id]=data;
+    }
+  }catch(e){comebackErr="Kunne ikke opdatere programmerne ("+(e.code||e.message)+").";}
+  renderComeback();
 };
 
 // ── Kropsmål & Ernæring ───────────────────────────────────────────────────────

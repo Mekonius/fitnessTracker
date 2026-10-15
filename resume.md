@@ -94,6 +94,22 @@ profilkort med initial + farve, skift via badge øverst.
 - **Reglerne deployes ikke af GitHub Actions** — de skal udgives i Firebase
   Console (eller med `firebase deploy --only firestore:rules`).
 
+## Athletic Comeback (6 ugers program)
+- Data og uge-logik i `comeback.js` (rent modul), UI i `index.html`, tests i
+  `tests/comeback.test.mjs`. Stabil nøgle `athletic-comeback-falktoft-6w`.
+- Tre pas gemmes som helt almindelige egne programmer (`_a`, `_c`, `_b`), så de
+  kan redigeres i programbyggeren, tildeles dage og logges som alt andet.
+- Ugen (1–6) gemmes pr. profil i `settings/comeback`. Uge 1–2 = 2 sæt, 3–4 = 2
+  sæt med valgfrit tredje, 5–6 = 3 sæt. Kondition først fra uge 3 (20→35 min).
+- Intet sker automatisk: "LÆG UGEN I MIN PLAN" og "SÆT PROGRAMMERNE TIL UGE X"
+  er to bevidste tryk. Seed springer pas over, der allerede findes, så egne
+  rettelser aldrig overskrives.
+- Konditionspasset bruger den eksisterende tidsøvelse-type med `unit:"MIN"`, så
+  der logges minutter i stedet for kilo. Nye katalog-gruppe KONDITION holdes ude
+  af volumen-analysen via `NO_VOLUME`.
+- Sikkerhedsnoten om nylig ørhed vises øverst i modulet. Appen giver ingen
+  lægelig vurdering og spærrer ikke for noget.
+
 ## Opdatering (så man ikke skal slette genvejen)
 - CI stempler samme git-sha i `<meta name="build">` og i `version.txt`.
 - Appen henter `version.txt` med `no-store` ved opstart og hver gang den kommer i

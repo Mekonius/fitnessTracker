@@ -1,0 +1,20 @@
+name: Firestore rules
+# Manuelt: Actions → "Firestore rules" → Run workflow. Deployes aldrig af sig selv.
+on:
+  workflow_dispatch:
+jobs:
+  rules:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Deploy regler
+        env:
+          SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          test -n "$SA" || { echo "Mangler secret FIREBASE_SERVICE_ACCOUNT"; exit 1; }
+          printf '%s' "$SA" > "$RUNNER_TEMP/sa.json"
+          GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json" \
+            npx --yes firebase-tools@13 deploy --only firestore:rules --project fitness-tracker-3def9

@@ -11,7 +11,7 @@ export const COMEBACK_WEEKS = 6;
 
 export const COMEBACK = {
   key: COMEBACK_KEY,
-  version: 1,
+  version: 2,
   name: "Athletic Comeback – Falktoft-inspireret",
   subtitle: "Styrke + kondition · 6 ugers roligt comeback",
   goal: "Stærk og atletisk krop med bedre kondition",
@@ -60,7 +60,9 @@ export const SESSIONS = [
       { id: "leg_curl", name: "Seated leg curl", rest: "90s", tip: "Roligt tempo og fuld kontrol hele vejen.",
         phases: [{ sets: 2, reps: "12" }, { sets: 2, reps: "12" }, { sets: 3, reps: "10-12" }] },
       { id: "pallof_press", name: "Pallof press (kabel)", rest: "90s", tip: "Stabil kropsstamme. Brug let modstand og træk vejret roligt.",
-        phases: [{ sets: 2, reps: "10/side" }, { sets: 2, reps: "10/side" }, { sets: 3, reps: "10/side" }] }
+        phases: [{ sets: 2, reps: "10/side" }, { sets: 2, reps: "10/side" }, { sets: 3, reps: "10/side" }] },
+      { id: "tricep_pushdown", name: "Triceps pushdown (kabel)", rest: "90s", since: 2, tip: "Albuerne ind til siden. Let modstand og fuld kontrol — stop med gentagelser i reserve.",
+        phases: [{ sets: 2, reps: "12" }, { sets: 2, reps: "12" }, { sets: 3, reps: "10-12" }] }
     ]
   },
   {
@@ -99,11 +101,16 @@ export const SESSIONS = [
       { id: "glute_bridge", name: "Glute bridge på måtte", rest: "90s", tip: "Bevæg roligt. Ingen tunge vægte over hoften i denne fase.",
         phases: [{ sets: 2, reps: "10" }, { sets: 2, reps: "10" }, { sets: 3, reps: "12" }] },
       { id: "dead_bug", name: "Dead bug", rest: "60s", tip: "Hold lænden stabil mod gulvet og træk vejret roligt.",
-        phases: [{ sets: 2, reps: "8/side" }, { sets: 2, reps: "8/side" }, { sets: 3, reps: "8-10/side" }] }
+        phases: [{ sets: 2, reps: "8/side" }, { sets: 2, reps: "8/side" }, { sets: 3, reps: "8-10/side" }] },
+      { id: "shoulder_press", name: "Skulderpres (maskine)", rest: "90s", since: 2, tip: "Siddende i maskine med ryggen mod puden. Let vægt, ingen failure.",
+        phases: [{ sets: 2, reps: "10" }, { sets: 2, reps: "10" }, { sets: 3, reps: "8-12" }] },
+      { id: "cable_curl", name: "Bicepscurl (kabel)", rest: "90s", since: 2, tip: "Albuerne ind til kroppen og roligt tempo. Let modstand.",
+        phases: [{ sets: 2, reps: "12" }, { sets: 2, reps: "12" }, { sets: 3, reps: "10-12" }] }
     ]
   }
 ];
 
+const DAYS = ["Søndag", "Mandag", "Tirsdag", "Onsdag", "Torsdag", "Fredag", "Lørdag"];
 export const sessionById = id => SESSIONS.find(s => s.id === id) || null;
 export const sessionByLetter = l => SESSIONS.find(s => s.letter === l) || null;
 
@@ -117,7 +124,7 @@ export function sessionForWeek(id, week) {
     week: Math.min(Math.max(Math.round(Number(week) || 1), 1), COMEBACK_WEEKS),
     optional: !!s.fromWeek && (Number(week) || 1) < s.fromWeek,
     exercises: s.exercises.map(ex => ({
-      id: ex.id, name: ex.name, rest: ex.rest, tip: ex.tip, unit: ex.unit, isTime: ex.isTime,
+      id: ex.id, name: ex.name, rest: ex.rest, tip: ex.tip, unit: ex.unit, isTime: ex.isTime, since: ex.since || 1,
       sets: ex.phases[ph].sets, reps: ex.phases[ph].reps
     }))
   };
@@ -153,7 +160,7 @@ export function weekPlan(week) {
   const w = Math.min(Math.max(Math.round(Number(week) || 1), 1), COMEBACK_WEEKS);
   return SESSIONS.map(s => ({
     day: s.day,
-    dayName: ["Søndag", "Mandag", "Tirsdag", "Onsdag", "Torsdag", "Fredag", "Lørdag"][s.day],
+    dayName: DAYS[s.day],
     id: s.id, letter: s.letter, name: s.name,
     optional: !!s.fromWeek && w < s.fromWeek,
     cardio: !!s.cardio,
@@ -220,3 +227,34 @@ export function programDocs(lookup, week = 1) {
 // Findes programmet allerede? Bruges til at holde seed idempotent.
 export const isComebackProgram = prog => !!prog && prog.comebackKey === COMEBACK_KEY;
 export const comebackProgramIds = () => SESSIONS.map(s => s.id);
+
+// Programmer gemt før version 2 mangler skulder- og armøvelserne. Kun øvelser, der
+// er kommet til siden programmets gemte version, tilføjes — aldrig noget der er slettet.
+export function exercisesToAdd(prog, lookup, week = 1) {
+  if (!isComebackProgram(prog)) return [];
+  const saved = Number(prog.comebackVersion) || 1;
+  const have = new Set((prog.exercises || []).map(e => e.id));
+  const s = sessionForWeek(prog.id || "", week) || SESSIONS.find(x => x.name === prog.name);
+  if (!s) return [];
+  return s.exercises.filter(ex => (ex.since || 1) > saved && !have.has(ex.id)).map(ex => {
+    const cat = (lookup && lookup(ex.id)) || {};
+    return {
+      id: ex.id, name: ex.name || cat.name || ex.id, machine: cat.machine || "", muscles: cat.muscles || "",
+      tip: ex.tip || cat.tip || "", sets: ex.sets, reps: ex.reps, rest: ex.rest
+    };
+  });
+}
+
+// Hvad "læg ugen i min plan" ændrer i forhold til den nuværende plan, så knappen kan
+// vise det før noget overskrives. current: {dag: programnøgle}, labelOf: nøgle → navn.
+export function planChanges(week, current, labelOf = x => x) {
+  const target = splitForWeek(week);
+  const out = [];
+  SESSIONS.forEach(s => {
+    const from = current && current[s.day] || null;
+    const to = target[s.day] || null;
+    if (to && from !== to) out.push({ day: s.day, dayName: DAYS[s.day], from: from && labelOf(from), to: labelOf(to) });
+    if (!to && from === s.id) out.push({ day: s.day, dayName: DAYS[s.day], from: labelOf(from), to: null });
+  });
+  return out;
+}
